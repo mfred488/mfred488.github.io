@@ -720,7 +720,32 @@ eql> search process where logon_id == 999 | count process_name
 
 We went straight for the PowerShell events, but the first line above is interesting: [`ntdsutil`](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc753343(v%3Dws.11)) is an util that can be used to perform various maintenance activities on Active Directory Domain Services. The [second hint given by Mary](https://pen-testing.sans.org/blog/2019/12/10/eql-threat-hunting/) confirms that this tool can be used to create a backup of a domain password hashes, which can then be exfiltrated. `ntdsutil` is the key of the second challenge!
 
+### Network Log Analysis: Determine Compromised System
+
+> The attacks don't stop! Can you help identify the IP address of the malware-infected system using these [Zeek logs](https://downloads.elfu.org/elfu-zeeklogs.zip)? For hints on achieving this objective, please visit the Laboratory and talk with Sparkle Redberry.
+
+The elf advises us to use [RITA](https://github.com/activecm/rita) to analyze these logs, so let's do that.
+
+Once again, the installation is not as smooth as it could be </grumble again>:
+* The supported distributions are explicitely listed in the installer
 {% highlight bash %}
+if [ "$_OS" != "Ubuntu" -a "$_OS" != "CentOS" -a "$_OS" != "RedHatEnterpriseServer" ]; then
+{% endhighlight %}
+Let's be adventurous and replace "RedHatEnterpriseServer" by "Fedora" in the installing script
+* The installer also struggles to install `bro` and `mongo`. We probably won't need `bro`, and we can install `mongo` using [this procedure](https://developer.fedoraproject.org/tech/database/mongodb/about.html)
+* Then we can finally install RITA: `sudo ./install.sh --disable-bro --disable-mongo`
+* But when we try to use it, we get yet another error: `Failed to connect to database: unsupported version of MongoDB. 4.0.14 not within [3.2.0, 3.7.0)`
+MongoDB 3.7 was the development series just before MongoDB 4..0 (stable series) was released, so whatever ran with MongoDB 3.7 should still work with 4.0. We'll try our luck by changing `MaxMongoDBVersion` in `database/db.go`, and [building RITA manually](https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md)
+
+Don't forget to also "uncomment" the "InternalSubnet" section of `/etc/rita/config.yaml`.
+
+Now that we're done with the boring part, let's import the data into RITA:
+
+{% highlight bash %}
+rita import ~/hhc2019/elfu-zeeklogs/ elfu-zeeklogs
+# This will take a while
+rita html-report
 {% endhighlight %}
 
+The "Beacons" report shows that `192.168.134.130` shows signs of [beaconing](https://www.activecountermeasures.com/blog-beacon-analysis-the-key-to-cyber-threat-hunting/): this is the infected machine.
 
