@@ -533,7 +533,9 @@ Wow, that was a lot for an elf puzzle! We're now all warmed up for the main obje
 
 ## Main objectives
 
-You can click on your badge and go in the "Objectives" to get, at any time, a recap of your objectives.
+You can click on your badge and go in the "Objectives" to get, at any time, a recap of your objectives. For (almost) each challenge, we'll be able to use some hints given by the elves we helped.
+
+Contrary to the elves challenges, you'll need from now to work on your computer, and to install various open-source tools in order to quickly crack the problems. I usually don't want to do that on my computer (as I'll typically not need any of these tools in the foreseeable future), so I set up a Fedora virtual machine and worked exclusively inside this VM.
 
 ### Unredact Threatening Document
 
@@ -574,3 +576,55 @@ There are probably hundreds of ways to retrieve it. I opened the document in Chr
 >
 > --A Concerned and Aggrieved Character
 
+### Windows Log Analysis: Evaluate Attack Outcome
+
+> We're seeing attacks against the Elf U domain! Using [the event log data](https://downloads.elfu.org/Security.evtx.zip), identify the user account that the attacker compromised using a password spray attack. Bushy Evergreen is hanging out in the train station and may be able to help you out.
+
+The hints given by Bushy Evergeen suggest to look at this open-source tool called [DeepBlueCLI](https://github.com/sans-blue-team/DeepBlueCLI).
+This tool comes in two flavours: there's a Python version and a PowerShell version. As much as we enjoyed playing with PowerShell during the previous elf challenge, let's use the python version for now.
+
+The most painful part of the set-up is actually to install [libevtx](https://github.com/libyal/libevtx), on which the Python version of DeepBlueCLI relies. I'm not quite sure what this library is doing, but it requires an insane amount of dependencies. </grumble>
+
+After libevtx is correctly installed, we should be able to run DeepBlueCLI on our `evtx` file:
+
+{% highlight bash %}
+$ python DeepBlue.py ../Security.evtx
+$
+{% endhighlight %}
+
+What? Nothing happened ? Are we using this tool correclty? Let's check out the Python version readme:
+>DeepBlueCLI, ported to Python. Designed for parsing evtx files on Unix/Linux.
+>
+>Current version: alpha. It supports command line parsing for Security event log 4688, PowerShell log 4014, and Sysmon log 1. Will be porting more functionality from DeepBlueCLI after DerbyCon 7.
+
+How unlucky we are. The Python version contains only a limited subset of the PowerShell version, and nothing related to password spray. We can try to fall back to the PowerShell version (I actually tried), but we won't get far: [Get-WinEvent is, as of now, a Windows-only cmdlet](https://github.com/PowerShell/PowerShell/issues/5810).
+
+Alright, let's roll up our sleeves and implement the password spray detection in the Python version of DeepBlueCLI.
+
+(An hour passes)
+
+Alright, we ported the password spray detection algorithm already implemented in PowerShell version to the Python version. If you're interested, the [pull request](https://github.com/sans-blue-team/DeepBlueCLI/pull/15) is pending.
+
+The result is still a bit underwhelming though; we have a list of users who were targetted by the spray attack, but no easy way to know which one got compromised. Diving into the details of `DeepBlue.py`, we see that the parsing is actually done by `evtxexport`. So let's try to use it directly to analyze the events
+
+{% highlight bash %}
+$ evtxexport ../Security.evtx  > result
+$ cat result | grep -B 5 0x00001228 | grep "Creation time" | head -n1
+Creation time     : Nov 19, 2019 12:21:44.263822500 UTC
+$ cat result | grep -B 5 0x00001228 | grep "Creation time" | tail -n1
+Creation time     : Nov 19, 2019 12:22:51.594765600 UTC
+{% endhighlight %}
+
+It looks like the spray attack happened on November 19th, from 12:21:44 to 12:22:51.
+Do we see any successfull login ([eventid 4624](https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624)) at that time? Using a couple of greps (with the handy options `A` and `B`, allowing to keep lines surrounding the matching lines), we can extract the users (6th string of the event's data) who managed to login at that time.
+
+{% highlight bash %}
+$ cat result | grep "0x00001210" -B 5 -A 28 | grep "Nov 19, 2019 12:2[12]" -A 32 | grep "String: 6" | sort | uniq
+String: 6     : DC1$
+String: 6     : pminstix
+String: 6     : supatree
+{% endhighlight %}
+
+`supatree` is the only user who was identified as a target by DeepBlueCLI: he's the victim.
+
+Given that this objective's difficulty was rated 1/5, I was definitely expecting something more straightforward, and I wouldn't be surprised if there is a much simpler way to identify the victim.
