@@ -453,12 +453,124 @@ Get-Content /shall/see
 Get the .xml children of /etc - an event log to be found. Group all .Id's and the last thing will be in the Properties of the lonely unique event Id.
 {% endhighlight %}
 
-Another riddle?!
+Another riddle?! Don't worry, that's the last one. Following the hint, let's look for an XML file in `/etc`
 
 {% highlight powershell %}
+Get-ChildItem -Path /etc -Recurse -Include *xml -ErrorAction SilentlyContinue
 {% endhighlight %}
 
+`/etc/systemd/system/timers.target.wants/EventLog.xml`: this looks like an event log file, which corroborates the hint. Great! After looking at the file structure, we can see that each event has a property that looks like: `<I32 N="Id">X</I32>`, where `X` is an integer. Let's find the "lonely unique event Id":
+
+{% highlight powershell %}
+Get-Content /etc/systemd/system/timers.target.wants/EventLog.xml | Select-String 'N="Id"' | group | Select-Object -Property Count,Name
+
+Count Name
+----- ----
+    1       <I32 N="Id">1</I32>
+   39       <I32 N="Id">2</I32>
+  179       <I32 N="Id">3</I32>
+    2       <I32 N="Id">4</I32>
+  905       <I32 N="Id">5</I32>
+   98       <I32 N="Id">6</I32>
+{% endhighlight %}
+
+As expected, there is one Id (<I32 N="Id">1</I32>) which appears only once in the document. If we have not been lied to, this event should be interesting. Here's a PowerShell script that this display this event only:
+
+{% highlight powershell %}
+[xml]$data = Get-Content /etc/systemd/system/timers.target.wants/EventLog.xml
+foreach ($event in $data.Objs.Obj) {
+    foreach ($i32prop in $event.Props.I32) {
+        if (($i32prop.N -eq "Id") -and ($i32prop.InnerText -eq "1")) {
+            echo $event.InnerXml
+        }
+    }
+}
+{% endhighlight %}
+
+By carefully inspecting the result, we finally find the holy grail: the optimal gas composure!
+{% highlight xml %}
+<Obj RefId="18016">
+   <TNRef RefId="1806" />
+   <ToString>System.Diagnostics.Eventing.Reader.EventProperty</ToString>
+   <Props>
+      <S N="Value">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -c "`$correct_gases_postbody = @{`n    O=6`n    H=7`n    He=3`n    N=4`n    Ne=22`n    Ar=11`n    Xe=10`n    F=20`n    Kr=8`n    Rn=9`n}`n"</S>
+   </Props>
+</Obj>
+{% endhighlight %}
+
+Finally, we can assemble the jigsaw puzzle:
+
+{% highlight powershell %}
+
+(Invoke-WebRequest -Uri http://127.0.0.1:1225/api/angle?val=65.5).RawContent
+(Invoke-WebRequest -Uri http://localhost:1225/api/refraction?val=1.867).RawContent
+(Invoke-WebRequest -Uri http://localhost:1225/api/temperature?val=-33.5).RawContent
+
+$correct_gases_postbody = @{
+    O=6
+    H=7
+    He=3
+    N=4
+    Ne=22
+    Ar=11
+    Xe=10
+    F=20
+    Kr=8
+    Rn=9
+    }
+(Invoke-WebRequest -Uri http://localhost:1225/api/gas -Method Post -Form $correct_gases_postbody).RawContent
+
+(Invoke-WebRequest -Uri http://localhost:1225/api/output).RawContent
+#Only 3.38 Mega-Jollies of Laser Output Reached! What ?!
+#Please don't tell me that we need to restart the system...
+(Invoke-WebRequest -Uri http://localhost:1225/api/off).RawContent
+(Invoke-WebRequest -Uri http://localhost:1225/api/on).RawContent
+(Invoke-WebRequest -Uri http://localhost:1225/api/output).RawContent
+#There we go! 6.72 Mega-Jollies.
+{% endhighlight %}
+
+Wow, that was a lot for an elf puzzle! We're now all warmed up for the main objectives.
 
 ## Main objectives
 
-Todo
+You can click on your badge and go in the "Objectives" to get, at any time, a recap of your objectives.
+
+### Unredact Threatening Document
+
+Let's go out of the crowded laboratory and breath some fresh air in the courtyard. In the noth-east corner of the courtyard, we find something that looks like [a blackmail addressed to the university staff](https://downloads.elfu.org/LetterToElfUPersonnel.pdf).
+
+Someone wanted to hide most of the blackmail's content, by hiding it with a "Confidential" sticker. This is yet another example of a frequent mistake: instead of removing the information, the person just added a sticker on top of it, hoping to hide it. This means that the secret information is somehow still present in the file.
+
+There are probably hundreds of ways to retrieve it. I opened the document in Chrome's builtin PDF view, and realized that the text was selectable! A simple copy-paste from Chrome to my favourite text editor revealed the letter:
+
+> Date: February 28, 2019
+>
+> To the Administration, Faculty, and Staff of Elf University
+> 17 Christmas Tree Lane
+> North Pole
+>
+> From: A Concerned and Aggrieved Character
+>
+> Subject: DEMAND: Spread Holiday Cheer to Other Holidays and Mythical Characters… OR
+> ELSE!
+>
+>
+> Attention All Elf University Personnel,
+>
+> It remains a constant source of frustration that Elf University and the entire operation at the
+> North Pole focuses exclusively on Mr. S. Claus and his year-end holiday spree. We URGE
+> you to consider lending your considerable resources and expertise in providing merriment,
+> cheer, toys, candy, and much more to other holidays year-round, as well as to other mythical
+> characters.
+>
+> For centuries, we have expressed our frustration at your lack of willingness to spread your
+> cheer beyond the inaptly-called “Holiday Season.” There are many other perfectly fine
+> holidays and mythical characters that need your direct support year-round.
+>
+> If you do not accede to our demands, we will be forced to take matters into our own hands.
+> We do not make this threat lightly. You have less than six months to act demonstrably.
+>
+> Sincerely,
+>
+> --A Concerned and Aggrieved Character
+
