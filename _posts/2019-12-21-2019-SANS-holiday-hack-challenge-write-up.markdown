@@ -860,3 +860,19 @@ $ curl https://elfu-soc.s3.amazonaws.com/stoQ%20Artifacts/home/ubuntu/archive/f/
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Holiday Cheer Assignment</dc:title><dc:subject>19th Century Cheer</dc:subject><dc:creator>Bradly Buttercups</dc:creator><cp:keywords></cp:keywords><dc:description>Kent you are so unfair. And we were going to make you the king of the Winter Carnival.</dc:description><cp:lastModifiedBy>Tim Edwards</cp:lastModifiedBy><cp:revision>4</cp:revision><dcterms:created xsi:type="dcterms:W3CDTF">2019-11-19T14:54:00Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">2019-11-19T17:50:00Z</dcterms:modified><cp:category></cp:category></cp:coreProperties>
 {% endhighlight %}
+
+
+### Get Access To The Steam Tunnels
+
+> Gain access to the steam tunnels. Who took the turtle doves? Please tell us their first and last name. For hints on achieving this objective, please visit Minty's dorm room and talk with Minty Candy Cane.
+
+Let's go back to the student's dorm, and talk to Minty. She advises us to look at the talk on [optical decoding of keys](http://www.youtube.com/watch?v=KU6FJnbkeLA). I usually don't watch the talks (or I just quickly move forward to the part that seems most related to the challenge), but I'm happy I watched this one. It really made me realize that the "secret" encoded in a simple physical key is actually not that big, and that a decent photo of it allows anybody to reproduce it.
+
+Having watched this, we're now looking for a picture of the key of the door in Minty's closet. This was the hardest part of the challenge for me. I think I spent literally an hour walking around in the different areas, checking the different PNJ's avatars, until I realized that everytime you enter Minty's room, there's this weird elf who hops into the closet! If you already visited Minty's room, you'll probably need a hard refresh (Ctrl+Alt+R on Firefox Linux) to see [his avatar's url](https://2019.kringlecon.com/images/avatars/elves/krampus.png) in the network tab of the developer tools.
+
+Now that we have the picture, we just need to unleash our Gimp skills and to overlay the picture with [the Schlage decoding template](https://github.com/deviantollam/decoding/blob/master/Key%20Decoding/Decoding%20-%20Schlage.png):
+
+TODO image of the overlay
+
+Hence we can use the code *122520* to grind a copy of the key, and open the door to the steam tunnels!
+
