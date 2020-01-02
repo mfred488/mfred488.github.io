@@ -1166,7 +1166,7 @@ python3 ./bin/retdec-decompiler.py ../../elfscrow.exe  -p ../../elfscrow.pdb
 Then looking for the sentence "Generated an encryption key" in the generated source, we quickly reach this interesting part of the code:
 
 {% highlight c %}
-/ From module:   e:\hhc\hhc19-grandchallenge-elfscrow\client\elfscrow\elfscrow.obj
+// From module:   e:\hhc\hhc19-grandchallenge-elfscrow\client\elfscrow\elfscrow.obj
 // Address range: 0x401d90 - 0x401dba
 // Line range:    53 - 56
 void super_secure_srand(int32_t seed) {
@@ -1247,3 +1247,45 @@ for timestamp in range(1575658800, 1575666000):
         pass
 {% endhighlight %}
 
+
+
+
+### Open the Sleigh Shop Door
+
+> Visit Shinny Upatree in the Student Union and help solve their problem. What is written on the paper you retrieve for Shinny?
+
+> For hints on achieving this objective, please visit the Student Union and talk with Kent Tinseltooth.
+
+The next challenge is to break into [Shinny's crate](https://crate.elfu.org/), using your browser's developer tools. I guess that's a good way to discover the developer tools if you don't know about it yet. If you've already used them in the past, this challenge shouldn't take too much of your time.
+
+I did this with Firefox, so the solution I'll give here might be slightly different in another browser.
+
+1. You don't need a clever riddle to open the console and scroll a little.
+Open the developer console, and scroll up to see the 8-characters code.
+2. Some codes are hard to spy, perhaps they'll show up on pulp with dye?
+"Print" the webpage (Ctrl+P) in a PDF file and the code will be revealed near to the question.
+3. This code is still unknown; it was fetched but never shown.
+Open the Network tab, and check the file which have been [fetched](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API). The file is fetched every minute, so if you have opened the network tab after the page initially loaded, you'll just have to wait for 1 minute before it shows up!
+4. Where might we keep the things we forage? Yes, of course: Local barrels!
+Look at the tab "Storage", and further down in the section "Local storage". You'll see an entry with the key 🛢️🛢️🛢️, and the value is the code.
+5. Did you notice the code in the title? It may very well prove vital.
+The code's written at the end of the page's title; we can see the full title by just hovering the mouse cursor over the tab.
+6. In order for this hologram to be effective, it may be necessary to increase your perspective.
+Right-click on the hologram, "Inspect this element", then increase the value of its [perspective](https://developer.mozilla.org/en-US/docs/Web/CSS/perspective) CSS attribute to something massive; this will display the code in the hologram.
+7. The font you're seeing is pretty slick, but this lock's code was my first pick.
+Right-click on the riddle's text, "Inspect this element", then have a look at the property [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family): thie first font choice is the code.
+8. In the event that the .eggs go bad, you must figure out who will be sad.
+Right-click on the word eggs, "Inspect this element", then click on the button "event" next to the `span` element in the HTML code, and have a look at the event listener's code: `() => window['VERONICA'] = 'sad'`
+9. This next code will be unredacted, but only when all the chakras are :active.
+For each word in the riddle, click on it and hold the mouse button down; for some words, 1 or 2 characters will be displayed. Type them down in the same order you revealed them, and you'll have the code.
+10. Oh, no! This lock's out of commission! Pop off the cover and locate what's missing.
+Right-click on the lock's cover, "Inspect this element"; then locate the `div` node which has the `cover` class in the DOM tree. Remove it (Right click > "Delete node"); this will reveal [the circuit board](https://crate.elfu.org/images/lock_inside.png), with the code written in the bottom-right corner.
+When you enter the code and try to unlock the lock, nothing happens. If you have a look at the javascript console, you'll see this error message:
+> Missing macaroni!
+
+What the heck is that? Well, if you simply search for "macaroni" in the HTML document, you'll find this element:
+{% highlight html %}
+<div class="component macaroni" data-code="A33"></div>
+{% endhighlight %}
+In the DOM view, drag-and-drop this div into the last lock (where the cover used to be), and validate it again. You'll then see another error message (*Missing cotton swab!*).
+Repeat the same procedure with the swab, then the gnome, and you'll be done with this challenge!
