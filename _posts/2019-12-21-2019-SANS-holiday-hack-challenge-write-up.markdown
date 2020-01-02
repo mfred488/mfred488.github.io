@@ -749,3 +749,114 @@ rita html-report
 
 The "Beacons" report shows that `192.168.134.130` shows signs of [beaconing](https://www.activecountermeasures.com/blog-beacon-analysis-the-key-to-cyber-threat-hunting/): this is the infected machine.
 
+### Splunk
+
+> Access [https://splunk.elfu.org/](https://splunk.elfu.org/) as elf with password elfsocks. What was the message for Kent that the adversary embedded in this attack? The SOC folks at that link will help you along! For hints on achieving this objective, please visit the Laboratory in Hermey Hall and talk with Prof. Banas.
+
+Splunk! I happily use that tool on an almost daily basis at work, so I'm glad to finally see it used in SANS' holiday hack challenge. Prof. Banas will actually not help us that much during this challenge; instead, let's just log in Splunk and follow the hints given by Alice Bluebird in the SOC Secure chat.
+
+In my opinion, this challenge is pretty hard if you don't use the hints given by Alice, but it's too straightforward if you follow the training questions. So if you don't manage to solve this challenge without any hints, but still want a bit of challenge, please find below a few hints of mine:
+* Professor Banas computer was hacked, and a sensitive file was exfiltrated; find when this was done.
+* Then find the malware that did that, and find out how this ended up on Professor Banas computer.
+* stoQ logs are indexed in Splunk. Using these, identify the path to the artifact containing the malware, and download it from [http://elfu-soc.s3-website-us-east-1.amazonaws.com]
+
+#### Finding the exfiltrated file
+
+Let's start with a rather simple search to see what kind of events related to Prof. Banas files are there. Since our dear professor is a Windows user, we expect his documents to be located in the folder "`C:\username\Documents\`", and we expect his username to contain the string `banas`. So let's go with the simple search :
+
+{% highlight splunk %}
+*banas* Documents
+{% endhighlight %}
+
+The very first event yielded by this query definitely looks like an exfiltration of the file `C:\Users\cbanas\Documents\Naughty_and_Nice_2019_draft.txt`, done on
+08/25/2019 at 09:20:23 AM.
+
+#### Find the malware, and how it was deployed on Prof. Banas' computer
+
+Unfortunately, in this event, we can't see the process which triggered the exfiltration. In order to find the malware, let's zoom over the 30 seconds surrounding the exfiltration, and [only keep the events containing a process id](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20processid&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=1566753593&latest=1566753653.001&display.events.type=raw&sid=1577975346.1508). With the following query, we can have an overview of who's doing what:
+
+{% highlight splunk %}
+* | stats count by ProcessId eventtype
+{% endhighlight %}
+
+Process 5864 seems to be the one doing all the "network" operations. We'll try to see what happened when this process was launched. Let's zoom out (using the time selector to go back to "All time"), and use the following query to see the first event containing this ProcessId:
+
+{% highlight splunk %}
+ProcessId=5864 | tail 1
+{% endhighlight %}
+
+I expected to find something using the parent's process id (3088), but the event we found in the previous search seems to be the only one containing "3088" :( So let's use again the "zoom" technique: we'll zoom on the 30 seconds before this process what launched, and [check the sysmon logs generated during this fimeframe](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20*%20sourcetype%3D%22XmlWinEventLog%3AMicrosoft-Windows-Sysmon%2FOperational%22&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=1566753485&latest=1566753545.001&display.events.type=raw&display.page.search.tab=events&display.general.type=events&sid=1577976378.1780).
+
+We can quickly spot a couple of events related to MS Word, and we understand that Prof. Banas actually opened the file `
+C:\Windows\Temp\Temp1_Buttercups_HOL404_assignment (002).zip\19th Century Holiday Cheer Assignment.docm` just before the malware started exfiltrating files. This file is hence our prime suspect!
+
+To understand how it got there, let's zoom out again, and check [all the events containing the filename `19th Century Holiday Cheer Assignment.docm`](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20%2219th%20Century%20Holiday%20Cheer%20Assignment.docm%22&earliest=0&latest=&display.page.search.mode=verbose&dispatch.sample_ratio=1&sid=1577976739.1823). The oldest event containing this filename is an event produced by stoQ, which tells us that this file was sent as a mail attachment to the professor. In the same event, we can by the way see the email's content:
+
+> Professor Banas, I have completed my assignment. Please open the attached zip file with password 123456789 and then open the word document to view it. You will have to click "Enable Editing" then "Enable Content" to see it. This was a fun assignment. I hope you like it! --Bradly Buttercups
+
+That's a fishy message if ever there was one! We can be confident that the malware was indeed contained in this .docm file, and that it was sent to Prof. Banas by email.
+
+### Find the artifact
+
+The artifacts scanned by stoQ are archived in an [S3 bucket](http://elfu-soc.s3-website-us-east-1.amazonaws.com), with a randomish filename. The filename is contained in the Splunk event; we can use a couple fo splunk commands to manipulate that JSON blob, or just visualize it with a JSON beautifier:
+
+{% highlight json %}
+    {
+      "size": 26975,
+      "payload_id": "9ff27aac-22c5-4b0f-a982-db99f4324fff",
+      "payload_meta": {
+        "should_archive": true,
+        "should_scan": true,
+        "extra_data": {
+          "filename": "19th Century Holiday Cheer Assignment.docm"
+        },
+        "dispatch_to": []
+      },
+      ...
+      "archivers": {
+        "filedir": {
+          "path": "/home/ubuntu/archive/c/6/e/1/7/c6e175f5b8048c771b3a3fac5f3295d2032524af"
+        }
+      }
+    }
+{% endhighlight %}
+
+Lets download the artifact then!
+
+{% highlight bash %}
+$ curl https://elfu-soc.s3.amazonaws.com/stoQ%20Artifacts/home/ubuntu/archive/c/6/e/1/7/c6e175f5b8048c771b3a3fac5f3295d2032524af
+Cleaned for your safety. Happy Holidays!
+
+In the real world, This would have been a wonderful artifact for you to investigate, but it had malware in it of course so it's not posted here. Fear not! The core.xml file that was a component of this original macro-enabled Word doc is still in this File Archive thanks to stoQ. Find it and you will be a happy elf :-)
+{% endhighlight %}
+
+Alright! Since the MS word documents are actually just zip archives containing XML documents, the "core.xml" file contained in our artifact must have been extracted and indexed separately by stoQ. We can indeed find such a document in the same Splunk event:
+
+{% highlight json %}
+    {
+      "size": 910,
+      "payload_id": "b93b38ec-4cbb-428c-9840-e5e7afecb754",
+      "payload_meta": {
+        "should_archive": true,
+        "should_scan": true,
+        "extra_data": {
+          "filename": "core.xml"
+        },
+        "dispatch_to": []
+      },
+      ...
+      "archivers": {
+        "filedir": {
+          "path": "/home/ubuntu/archive/f/f/1/e/a/ff1ea6f13be3faabd0da728f514deb7fe3577cc4"
+        }
+      }
+    }
+{% endhighlight %}
+
+And here lies the solution of this challenge:
+
+{% highlight bash %}
+$ curl https://elfu-soc.s3.amazonaws.com/stoQ%20Artifacts/home/ubuntu/archive/f/f/1/e/a/ff1ea6f13be3faabd0da728f514deb7fe3577cc4
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Holiday Cheer Assignment</dc:title><dc:subject>19th Century Cheer</dc:subject><dc:creator>Bradly Buttercups</dc:creator><cp:keywords></cp:keywords><dc:description>Kent you are so unfair. And we were going to make you the king of the Winter Carnival.</dc:description><cp:lastModifiedBy>Tim Edwards</cp:lastModifiedBy><cp:revision>4</cp:revision><dcterms:created xsi:type="dcterms:W3CDTF">2019-11-19T14:54:00Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">2019-11-19T17:50:00Z</dcterms:modified><cp:category></cp:category></cp:coreProperties>
+{% endhighlight %}
