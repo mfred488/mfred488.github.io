@@ -866,13 +866,127 @@ $ curl https://elfu-soc.s3.amazonaws.com/stoQ%20Artifacts/home/ubuntu/archive/f/
 
 > Gain access to the steam tunnels. Who took the turtle doves? Please tell us their first and last name. For hints on achieving this objective, please visit Minty's dorm room and talk with Minty Candy Cane.
 
-Let's go back to the student's dorm, and talk to Minty. She advises us to look at the talk on [optical decoding of keys](http://www.youtube.com/watch?v=KU6FJnbkeLA). I usually don't watch the talks (or I just quickly move forward to the part that seems most related to the challenge), but I'm happy I watched this one. It really made me realize that the "secret" encoded in a simple physical key is actually not that big, and that a decent photo of it allows anybody to reproduce it.
+Let's go back to the student's dorm, and talk to Minty. She advises us to look at the talk on [optical decoding of keys](http://www.youtube.com/watch?v=KU6FJnbkeLA). I usually don't watch the talks (or I just quickly move forward to the part that seems most related to the challenge), but I'm happy I watched this one. It really made me realize that the "secret" encoded in a simple physical key is as simple as a couple of digits, and that a decent photo of it allows anybody to reproduce it.
 
-Having watched this, we're now looking for a picture of the key of the door in Minty's closet. This was the hardest part of the challenge for me. I think I spent literally an hour walking around in the different areas, checking the different PNJ's avatars, until I realized that everytime you enter Minty's room, there's this weird elf who hops into the closet! If you already visited Minty's room, you'll probably need a hard refresh (Ctrl+Alt+R on Firefox Linux) to see [his avatar's url](https://2019.kringlecon.com/images/avatars/elves/krampus.png) in the network tab of the developer tools.
+Having watched this, we're now looking for a picture of the key of the door in Minty's closet. This was the hardest part of the challenge for me. I think I spent literally an hour walking around in the different areas, checking the different PNJ's avatars, until I realized that everytime you enter Minty's room, there's this weird elf who hops into the closet! If you already visited Minty's room, you'll probably need a hard refresh (Ctrl+Shift+R on Firefox Linux) to see [his avatar's url](https://2019.kringlecon.com/images/avatars/elves/krampus.png) in the network tab of the developer tools.
 
 Now that we have the picture, we just need to unleash our Gimp skills and to overlay the picture with [the Schlage decoding template](https://github.com/deviantollam/decoding/blob/master/Key%20Decoding/Decoding%20-%20Schlage.png):
 
 TODO image of the overlay
 
 Hence we can use the code *122520* to grind a copy of the key, and open the door to the steam tunnels!
+
+
+### Bypassing the Frido Sleigh CAPTEHA
+
+> Help Krampus beat the [Frido Sleigh contest](https://fridosleigh.com/). For hints on achieving this objective, please talk with Alabaster Snowball in the Speaker Unpreparedness Room.
+
+Let's check the rules of this game:
+
+> Eligibility and Restrictions:
+>
+> * Must be an Elf!
+> * Must be an Adult Elf - 180 years or older.
+> * No limit on the number of entries per elf.
+>
+> Selection Criteria:
+>
+> * One lucky elf will be chosen at random every minute from now until contest end.
+> * So keep submitting as many times as it takes until you win!
+
+So the idea is quite clear; we want to submit as many applications as possible, in order to be selected as the lucky winner! But even applying once turns out to be difficult, due to the captcha: the captcha expects you to identify, among 100 pictures, the one belonging to 3 random categories, in less than 5 seconds! The real challenge here will be to work around this captcha.
+
+To understand how the captcha mechanism works, the developer tools' network tab will once again be our best friend. We can see that, for each attempt:
+* a POST request is made to https://fridosleigh.com/api/capteha/request; the response contains a list of base64-encoded images, together with a random identifier for each image, and the names of the categories that must be identified by the end-user;
+* another POST request is sent to https://fridosleigh.com/api/capteha/submit, containing the identifiers of the pictures picked by the end-user.
+
+Something interesting to notice: there is no identifier, in the second request payload, that would allow the server to correlate it with the first request. In order to validate the response submitted in the second request, the server hence needs to rely on something else; and indeed, there's a session cookie resfreshed every time we ask for a new challenge. If you have a look at this cookie, and you may notice that it's a [JWT](https://jwt.io/) containing a blob of encrypted data. I would assume that this blob contains the list of uuids which are supposed to be picked by the end-user; upon receiving the second request, the server decrypts the session cookie and checks if the uuids submitted by the end-user match the ones in the cookie. This seems confirmed by the [captcha's documentation](https://fridosleigh.com/about_CAPTEHA.html):
+> You only need to solve the CAPTEHA challenge once per session and not for each and every subsequent HTTP request.
+
+Let's assume this encryption is correctly done for now, and try to crack the captcha using (as advised by Alabaster) some machine learning! The talk mentions in the hints points to a [GitHub-hosted project](https://github.com/chrisjd20/img_rec_tf_ml_demo) that seems to do almost what we need: it's classifying apples and bananas, and we want to classify Christmas trees and stockings.
+
+So, as a first step, we can perform a couple of challenge requests in order to get some images, and save the result in a folder `reqs`:
+
+{% highlight bash %}
+mkdir reqs
+curl -X POST https://fridosleigh.com/api/capteha/request > 1.json
+curl -X POST https://fridosleigh.com/api/capteha/request > 2.json
+curl -X POST https://fridosleigh.com/api/capteha/request > 3.json
+curl -X POST https://fridosleigh.com/api/capteha/request > 4.json
+curl -X POST https://fridosleigh.com/api/capteha/request > 5.json
+{% endhighlight %}
+
+Then let's create a folder `unlabelled_images`, then run the following script to parse the JSON document returned by the requests above, and save each picture as an invidual PNG files.
+
+{% highlight python %}
+import os
+import json
+import base64
+
+reqs_dir = "./reqs"
+images_dir = "./unlabelled_images"
+
+all_select_types = set()
+
+for filename in os.listdir(reqs_dir):
+    print("Analyzing images in file " + filename)
+    with open(os.sep.join([reqs_dir, filename]), "r") as req_file:
+        filecontent = json.loads(req_file.read())
+
+        for image in filecontent["images"]:
+            image_raw_content = base64.b64decode(image["base64"])
+            image_file_name = os.sep.join([images_dir, image["uuid"] + ".png"])
+
+            with open(image_file_name, "wb") as image_file:
+                print("Creating new unlabelled images in " + image_file_name)
+                image_file.write(image_raw_content)
+
+        for select_type in filecontent["select_type"].split(","):
+            all_select_types.add(select_type.replace("and ", "").strip())
+
+print("Select types:" + str(all_select_types))
+# Select types:{'Presents', 'Candy Canes', 'Santa Hats', 'Stockings', 'Christmas Trees', 'Ornaments'}
+{% endhighlight %}
+
+Now we know that we have 6 distinct categories of images, and we have 500 examples. Let's pull the code in (https://github.com/chrisjd20/img_rec_tf_ml_demo), remove the apple and banana folders in `training_images`, and create folders for our 6 categories. Using a visual file editor, we can then head into the folder `unlabelled_images` we created before, and, for each category, pick at least 10 representants of this category, and move them into `img_rec_tf_ml_demo/<category>`.
+
+That was the tedious part; now let's train our model (`python3 retrain.py --image_dir training_images/`) and relax!
+
+Once done, we need to adapt the script `predict_images_using_trained_model.py` to our needs. The original version tries to categorize the images located in the folder `unknown_images`. In our case, we want to:
+* request a challenge, by sending an HTTP POST request to `https://fridosleigh.com/api/capteha/request`
+* parse the response, decode the content, and submit each image to the classifier
+* select the uuids of the images that belong the the categories asked by the server, and send these uuids to `https://fridosleigh.com/api/capteha/submit`
+* we also need to send, in this second request, the cookie returned in the first response's headers (in Python, [requests' session](https://requests.readthedocs.io/en/master/user/advanced/#session-objects) can handle that for us)
+
+After implementing this, I was disappointed by the server's response to the second request:
+
+{% highlight json %}
+{"data":"Timed Out!","request":false}
+{% endhighlight %}
+
+You might not face this issue. But as you may remember, I'm doing everything from a virtual machine, and classifying 100 images takes from 8 to 12 seconds. Running it directly from a bare machine might be quick enough (especially if you manage to turn on [GPU acceleration](https://www.tensorflow.org/install/gpu)).
+
+I managed to work around this timing issue with the following optimizations in `predict_images_using_trained_model.py`:
+* I observed that classifying the first image takes much longer than the subsequent images. I assume tensorflow lazily initializes a few things the first time you submit an image to it. So I modified the code to classify a few images (from the set of labbeled images extracted before) as a warm-up, before requesting for the challenge
+* With a few tests, I also observed that the results must be sent less than 12 seconds after the challenge request has been sent. At the time I completed this challenge, this request could take up to 8 seconds to complete! (I don't know if that was due to the platform that was overloaded, or if the latency came from my internet connection). I knew that I needed at least 8 seconds to classify the images, so whenever it took more than 4 seconds to get a challenge, I discarded it and asked for a fresh one.
+
+With these two optimizations (see final code here TODO), we finally manage to pass the captcha. This means that now have a session cookie that we can use to spam submissions. Since there is one lucky draw per minute, you should receive your code by email within a few minutes after running the python script below:
+
+{% highlight python %}
+import requests
+import time
+
+start_time = time.time()
+s = requests.Session()
+
+name = "YourName"
+mail = "YourEmail" # <---- Change this to your email
+first_cookie = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." # <---- Change this to the session cookie we just got
+
+s.cookies.set("session", first_cookie)
+while True:
+    data = { "favorites": "cupidcrunch", "age": 180, "email": mail, "name": name }
+    r = s.post("https://fridosleigh.com/api/entry", data=data)
+    print(r.text)
+{% endhighlight %}
 
