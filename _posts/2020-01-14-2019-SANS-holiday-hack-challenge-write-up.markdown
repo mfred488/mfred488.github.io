@@ -7,7 +7,7 @@ tags: security
 
 For the past couple of years, SANS has spoilt us with an excellent annual "Holiday hack challenge". This is mostly for fun, even though the people who formulate a write-up have a chance to win one of the prizes offered by SANS.
 
-I've tried my luck at the Holiday Hack Challenge in the past few years, but I didn't take the time to spend some time on the write-up. So this is my first attempt!
+I've tried my luck at the Holiday Hack Challenge in the past few years, but I didn't take the time to work on the write-up. So this is my first attempt!
 
 A few notes before we start:
 * I'm not a native English speaker, so please forgive any grammatical mistake in this write-up.
@@ -882,7 +882,7 @@ In my opinion, this challenge is pretty hard if you don't use the hints given by
 2. Then find the malware that did that, and find out how this ended up on Professor Banas computer.
 3. stoQ logs are indexed in Splunk. Using these, identify the path to the artifact containing the malware, and download it from (here)[http://elfu-soc.s3-website-us-east-1.amazonaws.com].
 
-I'll follow these in the write-up of this objective below.
+I'll follow these steps in the write-up of this objective below.
 
 ### Step 1: Finding the exfiltrated file
 
@@ -1096,8 +1096,6 @@ I managed to work around this timing issue with the following optimizations in `
 * With a few tests, I also observed that the results must be sent less than 12 seconds after the challenge request has been sent. At the time I completed this challenge, this request could take up to 8 seconds to complete! (I don't know if that was due to the platform that was overloaded, or if the latency came from my internet connection). I knew that I needed at least 8 seconds to classify the images, so whenever it took more than 4 seconds to get a challenge, I discarded it and asked for a fresh one.
 
 With these two optimizations ([here's the final code](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/fast.py)), we finally manage to pass the captcha. This means that now have a session cookie that we can use to spam submissions. Since there is one lucky draw per minute, you should receive your code by email within a few minutes after running the python script below:
-
-(TODO attach the script to the email before submitting it to SANS)
 
 {% highlight python %}
 import requests
