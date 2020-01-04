@@ -19,10 +19,101 @@ A quick look at [ed documentation](https://www.gnu.org/software/ed/manual/ed_man
 
 ### Tangle Coalbox
 
-After getting into the courtyard and heading east, we meet Tangle who needs to guess the keypad's 4-digits code.
+After getting into the courtyard and heading east, we meet Tangle who needs to guess the keypad's 4-digits code. Tangle knows that one digit of the code is repeated twice, and that the code is a prime number. We can also clearly see, on the keypad itself, that the digits 1, 3 and 7 have been used way more than the other ones.
+
+That should be enough to limit the number of candidates! The Python script below will iterate through all the 4-digits code containing 1, 3 and 7 (one of them being repeated once), and will only keep the ones which are prime. We'll use a super simple [prime](https://en.wikipedia.org/wiki/Prime_number) detection algorithm; that's not the most efficient one, but that will definitely be quick enough in our case.
+
 {% highlight python %}
-print("Re-type the python script here")
+from math import sqrt
+from itertools import permutations
+
+def is_prime(n):
+    for i in range(2,int(sqrt(n))+1):
+        if (n % i) == 0:
+            return False
+    return True
+
+digits = [ [1,1,3,7], [1,3,3,7], [1,3,7,7] ]
+
+results = set()
+for unordered_digits in digits:
+    for ordered_digits in permutations(unordered_digits):
+        code = int("".join([str(x) for x in ordered_digits]))
+        if is_prime(code):
+            results.add(code)
+
+print("Codes:" + str(results))
+# Output: Codes:set([3137, 3371, 1373, 7331, 1733])
 {% endhighlight %}
+
+There are only 5 possible codes, so we can definitely try them one by one, and observe that *7331* is the code. This unlocks the dorm's room; let's go inside.
+
+### Pepper Minstix
+
+Pepper needs some help to go through the logs collected in [Graylog](https://www.graylog.org/products/open-source) and fill the incident report. Let's log into Graylog, select the stream containing "All messages", and start looking at the incident report form.
+
+> Minty CandyCane reported some weird activity on his computer after he clicked on a link in Firefox for a cookie recipe and downloaded a file.
+> What is the full-path + filename of the first malicious file downloaded by Minty?
+
+Let's search for "cookie* Downloads", as we expected the malicious file downloaded by Minty to be located in the Downloads folder of Minty's home directory. The oldest event we see is [this event](https://graylog.elfu.org/messages/graylog_0/5c8ec910-1b70-11ea-b211-0242ac120005), which confirms that Minty launched *C:\Users\minty\Downloads\cookie_recipe.exe*
+
+> The malicious file downloaded and executed by Minty gave the attacker remote access to his machine. What was the ip:port the malicious file connected to first?
+
+Thanks to the first log we found, we can follow the activity of this malicious process. By using the query `ParentProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe.exe OR ProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe.exe`, we stumble upon [this event](https://graylog.elfu.org/messages/graylog_0/5c93f930-1b70-11ea-b211-0242ac120005) which shows that the malicious executable file connected to *192.168.247.175:4444*.
+
+> What was the first command executed by the attacker?
+
+We can still keep the query used for the previous question, and see what happened after the malicious file connected to 192.168.247.175:4444 (which is most probably a command & control server). The [next event](https://graylog.elfu.org/messages/graylog_0/5c94bc80-1b70-11ea-b211-0242ac120005) shows that the first command used by the attacker was simply *whoami*.
+
+> What is the one-word service name the attacker used to escalate privileges?
+
+If we keep following the stream of event that was revealed by the query used two questions ago, we can see that the malware downloaded a file called `cookie_recipe2.exe`, then [uses *webexservice*](https://graylog.elfu.org/messages/graylog_0/5cf94ab0-1b70-11ea-b211-0242ac120005) to run it with escalated privileges.
+
+> What is the file-path + filename of the binary ran by the attacker to dump credentials?
+
+So now, we want to follow what `cookie_recipe2.exe` did. Let's update our query, and use `ParentProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe2.exe OR ProcessImage:C\:\\Users\\minty\\Downloads\\cookie_recipe2.exe` instead. After interrogating the C&C server, we can see that this new malicious file downloaded three files:
+* [First](https://graylog.elfu.org/messages/graylog_0/5d97d4a1-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimikatz.exe` and saved it as `C:\cookie.exe`
+* [Then](https://graylog.elfu.org/messages/graylog_0/5d9e3d40-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimikatz.dll` and saved it as `C:\mimikatz.dll`
+* [Then](https://graylog.elfu.org/messages/graylog_0/5da14a80-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimilove.exe` and saved it as `C:\cookielove.exe`
+* [Finally](https://graylog.elfu.org/messages/graylog_0/5dae90f0-1b70-11ea-b211-0242ac120005), it downloaded a file called `mimidrv.sys` and saved it as `C:\mimidrv.sys`
+
+A few seconds spent on Google show that [mimikatz](https://github.com/gentilkiwi/mimikatz) seems to be a tool that can be used to extract things such a password hashes from memory. So we're probably on the right track!
+
+Then the attacker tries to execute `C:\mimikatz.exe` (as shown in [this event](https://graylog.elfu.org/messages/graylog_0/5dbe9680-1b70-11ea-b211-0242ac120005)), forgetting that he hid it under another name (that was funny :)). And finally, the attacker uses `C:\cookie.exe` to dump the credentials (as shown in [this event](https://graylog.elfu.org/messages/graylog_0/5dc5e982-1b70-11ea-b211-0242ac120005)).
+
+> The attacker pivoted to another workstation using credentials gained from Minty's computer. Which account name was used to pivot to another machine?
+
+The last command executed by `cookie_recipe2.exe` is an `ipconfig`, at 05:47:04. Let's try to see if we see some other activity from the C&C server after that date. We can "zoom" on the 5 minutes surrounding this event at 05:47:04, use the C&C server IP address as an additional filter, and [see what happened during this timeframe](https://graylog.elfu.org/streams/000000000000000000000001/search?rangetype=absolute&fields=message%2Csource&width=1536&highlightMessage=5de09d70-1b70-11ea-b211-0242ac120005&from=2019-11-19T05%3A42%3A04.000Z&timerange-absolute-from=2019-11-19%2005%3A42%3A04&to=2019-11-19T05%3A52%3A04.000Z&timerange-absolute-to=2019-11-19%2005%3A52%3A04&q=source%3A%22elfu%5C-res%5C-wks1%22%20AND%20gl2_source_input%3A%225defd222adbe1d0012fab8ca%22%20AND%20%22192.168.247.175%22).
+
+We can see multiple failed [NTLM](https://en.wikipedia.org/wiki/NT_LAN_Manager) login attempts coming from the attacker's IP, as well as a [successfull login](https://graylog.elfu.org/messages/graylog_0/5e04a030-1b70-11ea-b211-0242ac120005), using *alabaster*'s credentials.
+
+> What is the time ( HH:MM:SS ) the attacker makes a Remote Desktop connection to another machine?
+
+Let's now search for the [RDP](https://en.wikipedia.org/wiki/Remote_Desktop_Protocol) connections from the attacker's IP, on the default port 3389, using the query `DestinationPort:3389 AND SourceIp:"192.168.247.175"`. We get 4 results; but none of them is the correct response. And indeed, these are the timestamps when a connection is opened (on port 3389) in order to create an RDP session.
+
+A [little bit of research](https://jpcertcc.github.io/ToolAnalysisResultSheet/details/mstsc.htm#KeyEvents-Destination) shows that, after a successfull RDP login attempt, we should see a log containing an EventID 4624 ("An account was successfully logged on."), with a Logon Type = 10 ("Terminal Service/Remote Desktop"). So let's try to display these events, with the query `EventID:4624 AND LogonType:10`. Bingo! We only fetched [one event](https://graylog.elfu.org/messages/graylog_0/6c638510-1b70-11ea-b211-0242ac120005
+), at *06:04:28*, and we can even see that the connection was established from the attacker's IP (thanks to the field SourceNetworkAddress). The session seems to last until 06:08:32.
+
+> The attacker navigates the file system of a third host using their Remote Desktop Connection to the second host. What is the SourceHostName,DestinationHostname,LogonType of this connection?
+
+Let's zoom (5 minutes) around the connection event we found just before, and [select only the logs which have a DestinationHostname](https://graylog.elfu.org/streams/000000000000000000000001/search?rangetype=absolute&fields=message%2Csource&width=1536&highlightMessage=6c638510-1b70-11ea-b211-0242ac120005&from=2019-11-19T05%3A59%3A28.000Z&timerange-absolute-from=2019-11-19%2005%3A59%3A28&to=2019-11-19T06%3A09%3A28.000Z&timerange-absolute-to=2019-11-19%2006%3A09%3A28&q=source%3A%22elfu%5C-res%5C-wks2%22%20AND%20gl2_source_input%3A%225defd222adbe1d0012fab8ca%22%20AND%20_exists_%3ADestinationHostname). On the left-hand side, we can click on "DestinationPort > Quick values" to see the most commonly targetted ports (from this host, and during the selected timeframe). We can see port 445, which can be used by [SMB servers](https://en.wikipedia.org/wiki/Server_Message_Block). That might be the protocol used by the attacker to browse other hosts: using the query `source:"elfu\-res\-wks2" AND gl2_source_input:"5defd222adbe1d0012fab8ca" AND _exists_:DestinationHostname AND DestinationPort:445`, we can indeed see an unusually high traffic towards that port during the selected timeframe, which seems to stop when the attacker's RDP session ends. The traffic either goes to the local host (`elfu-res-wks2`), or to a new host `elfu-res-wks3`
+
+Let's check if there's any login attempt from alabaster to `elfu-res-wks3` during this timeframe... [Bingo!](https://graylog.elfu.org/messages/graylog_0/67a1b740-1b70-11ea-b211-0242ac120005): this is a [4624](https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4624) event, with:
+* SourceHostName: ELFU-RES-WKS2 (we know that the attacker was connected on this host with Alabaster's credentials at that time, so it adds up)
+* DestinationHostname: elfu-res-wks3
+* LogonType: 3 ("Network", according to Microsoft's doc)
+
+> What is the full-path + filename of the secret research document after being transferred from the third host to the second host?
+
+We don't see much of what the attacker does on elfu-res-wks3. However, we can come back to the logs of the second host, and check what the attacker did after connecting to the third host ([between 06:07:22 and 06:08:32](https://graylog.elfu.org/streams/000000000000000000000001/search?rangetype=absolute&fields=source%2CLogonType%2Cmessage%2CProcessImage&width=1536&highlightMessage=6c638510-1b70-11ea-b211-0242ac120005&from=2019-11-19T06%3A07%3A22.000Z&timerange-absolute-from=2019-11-19%2006%3A07%3A22&to=2019-11-19T06%3A08%3A32.000Z&timerange-absolute-to=2019-11-19%2006%3A08%3A32&q=source%3A%22elfu%5C-res%5C-wks2%22%20AND%20alabaster)).
+
+We quickly spot [an event](https://graylog.elfu.org/messages/graylog_0/6650a630-1b70-11ea-b211-0242ac120005) containing the name and full path of the secret file, after it has been transferred from the third host:
+
+> What is the IPv4 address (as found in logs) the secret research document was exfiltrated to?
+
+Now that we have the file name, we can use it to find the command that was used to exfiltrate it. We'll see in [this event](https://graylog.elfu.org/messages/graylog_0/5f9cf370-1b70-11ea-b211-0242ac120005) that it was sent to pastebin.com. Then zooming around this event (not more than a few seconds), we finally find [this event](https://graylog.elfu.org/messages/graylog_0/5f9e04e0-1b70-11ea-b211-0242ac120005) which logs out established outgoing connection to pastebin, with the IP of the remote server: *104.22.3.84*.
+
+Incident report completed!
 
 ### Kent Tinseltooth
 
@@ -1569,4 +1660,5 @@ print("Summary: " + repr(attacks_by_type))
 {% endhighlight %}
 
 97 IPs! That looks close enough to 100. And indeed, by blocking these 97 IPs, we unblock the SRF!
+
 We can now head into the final room and enjoy the credits (... and don't miss on the [cliffhanger](https://downloads.elfu.org/LetterOfWintryMagic.pdf) lying in the upper left corner !)
