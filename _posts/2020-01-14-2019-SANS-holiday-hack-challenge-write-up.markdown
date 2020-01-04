@@ -2,7 +2,7 @@
 layout: post
 title:  "2019 SANS Holiday Hack Challenge write-up"
 date:   2020-01-14
-categories: security
+tags: security
 ---
 
 For the past couple of years, SANS has spoiled us with an excellent annual "Holiday hack challenge".
