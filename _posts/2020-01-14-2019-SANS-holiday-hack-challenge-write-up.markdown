@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "2019 SANS Holiday Hack Challenge write-up"
-date:   2019-12-20
+date:   2020-01-14
 categories: security
 ---
 
@@ -127,7 +127,7 @@ Interesting. The current "situation" seems to be encoded directly in the URL. Wh
 
 ### Kent Tinseltooth
 
-Now, heading north, we enter into the students union building and meet Kent, who's struggling with iptables. He wants to configure his firewall rules as follow;
+For now, we're done with the dorm. Going out and heading north, we enter into the students union building and meet Kent, who's struggling with iptables. He wants to configure his firewall rules as follow;
 1. Set the default policies to DROP for the INPUT, FORWARD, and OUTPUT chains.
 2. Create a rule to ACCEPT all connections that are ESTABLISHED,RELATED on the INPUT and the OUTPUT chains.
 3. Create a rule to ACCEPT only remote source IP address 172.19.0.225 to access the local SSH server (on port 22).
@@ -179,9 +179,9 @@ And indeed, `/bin/ls` is there and correctly lists the files in our friend's hom
 
 ### Alabaster Snowball
 
-Let's now go into the Speaker UNpreparedness Room, where we meet Alabaster. This elf wants to log in (using his completely secure login and passwords), and land into in a Bash shell. As you probably guessed, the natural way (`sudo alabaster_password`) will not exactly work (but you should definitely try first).
+Let's now go into the Speaker UNpreparedness Room, where we meet Alabaster. This elf wants to log in (using his completely secure login and password), and land into in a Bash shell. As you probably guessed, the natural way (`su alabaster_snowball`) will not exactly work (but you should definitely try first).
 
-As mentioned in the hints, the users shell is determined by the contents of /etc/passwd
+As mentioned in the hints, the user's shell is determined by the contents of /etc/passwd
 {% highlight bash %}
 $ cat /etc/passwd | grep alabaster_snowball
 alabaster_snowball:x:1001:1001::/home/alabaster_snowball:/bin/nsh
@@ -199,8 +199,8 @@ $ cp /bin/bash /bin/nsh
 cp: cannot create regular file '/bin/nsh': Operation not permitted
 {% endhighlight %}
 
-That's not what I expected. Please not that the error message is not `Permission denied`: this is NOT a permission issue. A little bit of Googling shows us that this error message comes up when one tries to remove/alter an [immutable file](https://www.tecmint.com/make-file-directory-undeletable-immutable-in-linux/).
-This requires root permissions though. But fortunately, runnin `sudo -l` shows that our current user can run `chattr` as root!
+That's not what I expected. Please not that the error message is not `Permission denied`: this is *not* a permission issue. A little bit of Googling shows us that this error message comes up when one tries to remove/alter an [immutable file](https://www.tecmint.com/make-file-directory-undeletable-immutable-in-linux/).
+This requires root permissions though. But fortunately, running `sudo -l` shows that our current user can run `chattr` as root!
 
 {% highlight bash %}
 $ sudo chattr -i /bin/nsh
@@ -278,7 +278,7 @@ The first database we landed in (`test`) does not contain much, so we switch to 
 ### Sparkle Redberry
 Only one to go! Let's get out of the Netwars room, and enter the laboratory. Sparkle Redberry is waiting near the computer-piloted laser, with the hardest elf challenge (in my opinion). Looking at the number of people standing in the room at the time I'm writing this, I believe I'm not the only one who struggled with this one.
 
-TODO picture here
+![The laser room was full of people!](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/packed_laser_room.JPG)
 
 Note: I was a bit reluctant to code using PowerShell at first. But this challenge is actually not trivial, and I don't think one can complete it by adapting PowerShell one-liners found on Stackoverflow. Hence I learned a bit of PowerShell for this, and I'm glad I did: the language is consistent, well documented, and often feels way cleaner than the shell script I usually write on Unix.
 
@@ -973,7 +973,7 @@ Having watched this, we're now looking for a picture of the key of the door in M
 
 Now that we have the picture, we just need to unleash our Gimp skills and to overlay the picture with [the Schlage decoding template](https://github.com/deviantollam/decoding/blob/master/Key%20Decoding/Decoding%20-%20Schlage.png):
 
-TODO image of the overlay
+![The decoded key](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/decoded-key.png)
 
 Hence we can use the code *122520* to grind a copy of the key, and open the door to the steam tunnels!
 
@@ -1071,7 +1071,9 @@ I managed to work around this timing issue with the following optimizations in `
 * I observed that classifying the first image takes much longer than the subsequent images. I assume tensorflow lazily initializes a few things the first time you submit an image to it. So I modified the code to classify a few images (from the set of labbeled images extracted before) as a warm-up, before requesting for the challenge
 * With a few tests, I also observed that the results must be sent less than 12 seconds after the challenge request has been sent. At the time I completed this challenge, this request could take up to 8 seconds to complete! (I don't know if that was due to the platform that was overloaded, or if the latency came from my internet connection). I knew that I needed at least 8 seconds to classify the images, so whenever it took more than 4 seconds to get a challenge, I discarded it and asked for a fresh one.
 
-With these two optimizations (see final code here TODO), we finally manage to pass the captcha. This means that now have a session cookie that we can use to spam submissions. Since there is one lucky draw per minute, you should receive your code by email within a few minutes after running the python script below:
+With these two optimizations ([here's the final code](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/fast.py)), we finally manage to pass the captcha. This means that now have a session cookie that we can use to spam submissions. Since there is one lucky draw per minute, you should receive your code by email within a few minutes after running the python script below:
+
+(TODO attach the script to the email before submitting it to SANS)
 
 {% highlight python %}
 import requests
@@ -1200,9 +1202,9 @@ $ wget https://studentportal.elfu.org/krampus/adb798ca.png
 $ wget https://studentportal.elfu.org/krampus/ba417715.png
 {% endhighlight %}
 
-Once again we can use our gimp skills to patch the pieces together, and here's the result:
+Once again we can use our Gimp skills to patch the pieces together, and here's the result:
 
-TODO picture
+![All pieces patched together](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/rebuilt.png)
 
 ### Recover Cleartext Document
 
