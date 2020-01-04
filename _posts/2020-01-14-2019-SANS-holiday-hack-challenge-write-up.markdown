@@ -7,17 +7,20 @@ categories: security
 
 For the past couple of years, SANS has spoiled us with an excellent annual "Holiday hack challenge".
 
-## The elves
+* TOC
+{:toc}
+
+# The elves
 
 Similarily to the previous editions, the elves faces some relatively easy issues. If we manage to help them, they'll throw us some pretty useful hints for the main objectives.
 So let's solve their problem first!
 
-### Bushy Evergreen
+## Bushy Evergreen
 
 In the lobby, Bushy is stuck in an opened `ed` session.
 A quick look at [ed documentation](https://www.gnu.org/software/ed/manual/ed_manual.html) lets us know that `q` is the command we're looking for.
 
-### Tangle Coalbox
+## Tangle Coalbox
 
 After getting into the courtyard and heading east, we meet Tangle who needs to guess the keypad's 4-digits code. Tangle knows that one digit of the code is repeated twice, and that the code is a prime number. We can also clearly see, on the keypad itself, that the digits 1, 3 and 7 have been used way more than the other ones.
 
@@ -48,7 +51,7 @@ print("Codes:" + str(results))
 
 There are only 5 possible codes, so we can definitely try them one by one, and observe that *7331* is the code. This unlocks the dorm's room; let's go inside.
 
-### Pepper Minstix
+## Pepper Minstix
 
 Pepper needs some help to go through the logs collected in [Graylog](https://www.graylog.org/products/open-source) and fill the incident report. Let's log into Graylog, select the stream containing "All messages", and start looking at the incident report form.
 
@@ -115,7 +118,7 @@ Now that we have the file name, we can use it to find the command that was used 
 
 Incident report completed!
 
-### Minty Candycane
+## Minty Candycane
 
 The previous puzzle was actually way longer than the average elf puzzle. Let's chill a little bit and play the game next to Minty, in easy mode.
 
@@ -125,7 +128,7 @@ At first glance, it seems that we're given some resources (money, reindeers, foo
 
 Interesting. The current "situation" seems to be encoded directly in the URL. What happens if we update the value of parameter `distance` to 7999 (instead of 317) ? We're now 1 mile away from Kringlecon, and our resources are still exactly the same. We just need to press "Go" one last time to pass the finish line and complete the game.
 
-### Kent Tinseltooth
+## Kent Tinseltooth
 
 For now, we're done with the dorm. Going out and heading north, we enter into the students union building and meet Kent, who's struggling with iptables. He wants to configure his firewall rules as follow;
 1. Set the default policies to DROP for the INPUT, FORWARD, and OUTPUT chains.
@@ -163,7 +166,7 @@ sudo iptables -A INPUT -i lo -j ACCEPT
 
 It can take a few seconds for the game to detect that the firewalling rules are ok.
 
-### SugarPlum Mary
+## SugarPlum Mary
 
 Let's now get out of the building, and head east to the Hermey Hall. Right in front of us stands SugarPlum Mary, who just wants to list the files in in home directory.
 Someone played a trick on him, and running `ls` justs output: `This isn't the ls you're looking for`
@@ -177,7 +180,7 @@ $ which ls
 A quick look at [the filesystem hierachy](https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard) tells us that something as essential as `ls` should be in `/bin`.
 And indeed, `/bin/ls` is there and correctly lists the files in our friend's home directory.
 
-### Alabaster Snowball
+## Alabaster Snowball
 
 Let's now go into the Speaker UNpreparedness Room, where we meet Alabaster. This elf wants to log in (using his completely secure login and password), and land into in a Bash shell. As you probably guessed, the natural way (`su alabaster_snowball`) will not exactly work (but you should definitely try first).
 
@@ -214,7 +217,7 @@ Loading, please wait......
 You did it! Congratulations!
 {% endhighlight %}
 
-### Holy Evergeen
+## Holy Evergeen
 
 We're done with the Speaker UNpreparedness Room; let's get out, and step into the Netwars room. Here we're greeted by Holly Evergreen, who is unable to find his way to the exam solutions stored in Mongo.
 
@@ -275,7 +278,7 @@ tincan
 
 The first database we landed in (`test`) does not contain much, so we switch to the more promising `elfu` database, and see an appealing collection named `solution`. It contains only one document, which gives us the key of this enigma. Running this last command `db.loadServerScripts();displaySolution();` in the mongo shell will unlock the solution!
 
-### Sparkle Redberry
+## Sparkle Redberry
 Only one to go! Let's get out of the Netwars room, and enter the laboratory. Sparkle Redberry is waiting near the computer-piloted laser, with the hardest elf challenge (in my opinion). Looking at the number of people standing in the room at the time I'm writing this, I believe I'm not the only one who struggled with this one.
 
 ![The laser room was full of people!](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/packed_laser_room.JPG)
@@ -313,7 +316,7 @@ O=5&H=5&He=5&N=5&Ne=20&Ar=10&Xe=10&F=20&Kr=10&Rn=10
 
 There are 4 parameters that can be set using the API, and we need to find the optimal value for each and every one of them in order to get an output of more than 5 Mega-Jollies!
 
-#### Mirror angle value
+### Mirror angle value
 The riddle starts with the file `/home/callingcard.txt`, as hinted in the message displayed when we log in:
 
 {% highlight powershell %}
@@ -350,7 +353,7 @@ PS /home/elf> Get-History
 
 There we go! We can see that someone has set the mirror angle value using the Web API (command 7) to *65.5 degrees*.
 
-#### Lense refraction
+### Lense refraction
 
 We also notice a weird command 9. Let's have a deeper look into this one:
 
@@ -454,7 +457,7 @@ refraction?val=1.867
 
 And here is our second parameter! The lense refraction must be set to *1.867*.
 
-#### Temperature
+### Temperature
 
 When we un-compressed the archive in the step above, we not only obtained the ELF file, but also a riddle:
 > Very shallow am I in the depths of your elf home. You can find my entity by using my md5 identity:
@@ -485,7 +488,7 @@ gth.
 
 We got the third parameter: the temperature must be set to -33.5.
 
-#### Gas composition
+### Gas composition
 
 The fourth and last parameter will require several steps. Let's start from the hint that was given together with the temperature value:
 
@@ -632,13 +635,13 @@ $correct_gases_postbody = @{
 
 Wow, that was a lot for an elf puzzle! We're now all warmed up for the main objectives.
 
-## Main objectives
+# Main objectives
 
 You can click on your badge and go in the "Objectives" to get, at any time, a recap of your objectives. For (almost) each challenge, we'll be able to use some hints given by the elves we helped.
 
 Contrary to the elves challenges, you'll need from now to work on your computer, and to install various open-source tools in order to quickly crack the problems. I usually don't want to do that on my computer (as I'll typically not need any of these tools in the foreseeable future), so I set up a Fedora virtual machine and worked exclusively inside this VM.
 
-### Unredact Threatening Document
+## Unredact Threatening Document
 
 Let's go out of the crowded laboratory and breath some fresh air in the courtyard. In the noth-east corner of the courtyard, we find something that looks like [a blackmail addressed to the university staff](https://downloads.elfu.org/LetterToElfUPersonnel.pdf).
 
@@ -677,7 +680,7 @@ There are probably hundreds of ways to retrieve it. I opened the document in Chr
 >
 > --A Concerned and Aggrieved Character
 
-### Windows Log Analysis: Evaluate Attack Outcome
+## Windows Log Analysis: Evaluate Attack Outcome
 
 > We're seeing attacks against the Elf U domain! Using [the event log data](https://downloads.elfu.org/Security.evtx.zip), identify the user account that the attacker compromised using a password spray attack. Bushy Evergreen is hanging out in the train station and may be able to help you out.
 
@@ -730,7 +733,7 @@ String: 6     : supatree
 
 Given that this objective's difficulty was rated 1/5, I was definitely expecting something more straightforward, and I wouldn't be surprised if there is a much simpler way to identify the victim.
 
-### Windows Log Analysis: Determine Attacker Technique
+## Windows Log Analysis: Determine Attacker Technique
 
 > Using [these normalized Sysmon logs](https://downloads.elfu.org/sysmon-data.json.zip), identify the tool the attacker used to retrieve domain password hashes from the lsass.exe process. For hints on achieving this objective, please visit Hermey Hall and talk with SugarPlum Mary.
 
@@ -821,7 +824,7 @@ eql> search process where logon_id == 999 | count process_name
 
 We went straight for the PowerShell events, but the first line above is interesting: [`ntdsutil`](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc753343(v%3Dws.11)) is an util that can be used to perform various maintenance activities on Active Directory Domain Services. The [second hint given by Mary](https://pen-testing.sans.org/blog/2019/12/10/eql-threat-hunting/) confirms that this tool can be used to create a backup of a domain password hashes, which can then be exfiltrated. `ntdsutil` is the key of the second challenge!
 
-### Network Log Analysis: Determine Compromised System
+## Network Log Analysis: Determine Compromised System
 
 > The attacks don't stop! Can you help identify the IP address of the malware-infected system using these [Zeek logs](https://downloads.elfu.org/elfu-zeeklogs.zip)? For hints on achieving this objective, please visit the Laboratory and talk with Sparkle Redberry.
 
@@ -850,7 +853,7 @@ rita html-report
 
 The "Beacons" report shows that `192.168.134.130` shows signs of [beaconing](https://www.activecountermeasures.com/blog-beacon-analysis-the-key-to-cyber-threat-hunting/): this is the infected machine.
 
-### Splunk
+## Splunk
 
 > Access [https://splunk.elfu.org/](https://splunk.elfu.org/) as elf with password elfsocks. What was the message for Kent that the adversary embedded in this attack? The SOC folks at that link will help you along! For hints on achieving this objective, please visit the Laboratory in Hermey Hall and talk with Prof. Banas.
 
@@ -861,7 +864,7 @@ In my opinion, this challenge is pretty hard if you don't use the hints given by
 * Then find the malware that did that, and find out how this ended up on Professor Banas computer.
 * stoQ logs are indexed in Splunk. Using these, identify the path to the artifact containing the malware, and download it from [http://elfu-soc.s3-website-us-east-1.amazonaws.com]
 
-#### Finding the exfiltrated file
+### Finding the exfiltrated file
 
 Let's start with a rather simple search to see what kind of events related to Prof. Banas files are there. Since our dear professor is a Windows user, we expect his documents to be located in the folder "`C:\username\Documents\`", and we expect his username to contain the string `banas`. So let's go with the simple search :
 
@@ -872,7 +875,7 @@ Let's start with a rather simple search to see what kind of events related to Pr
 The very first event yielded by this query definitely looks like an exfiltration of the file `C:\Users\cbanas\Documents\Naughty_and_Nice_2019_draft.txt`, done on
 08/25/2019 at 09:20:23 AM.
 
-#### Find the malware, and how it was deployed on Prof. Banas' computer
+### Find the malware, and how it was deployed on Prof. Banas' computer
 
 Unfortunately, in this event, we can't see the process which triggered the exfiltration. In order to find the malware, let's zoom over the 30 seconds surrounding the exfiltration, and [only keep the events containing a process id](https://splunk.elfu.org/en-US/app/SA-elfusoc/search?q=search%20processid&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=1566753593&latest=1566753653.001&display.events.type=raw&sid=1577975346.1508). With the following query, we can have an overview of who's doing what:
 
@@ -963,7 +966,7 @@ $ curl https://elfu-soc.s3.amazonaws.com/stoQ%20Artifacts/home/ubuntu/archive/f/
 {% endhighlight %}
 
 
-### Get Access To The Steam Tunnels
+## Get Access To The Steam Tunnels
 
 > Gain access to the steam tunnels. Who took the turtle doves? Please tell us their first and last name. For hints on achieving this objective, please visit Minty's dorm room and talk with Minty Candy Cane.
 
@@ -978,7 +981,7 @@ Now that we have the picture, we just need to unleash our Gimp skills and to ove
 Hence we can use the code *122520* to grind a copy of the key, and open the door to the steam tunnels!
 
 
-### Bypassing the Frido Sleigh CAPTEHA
+## Bypassing the Frido Sleigh CAPTEHA
 
 > Help Krampus beat the [Frido Sleigh contest](https://fridosleigh.com/). For hints on achieving this objective, please talk with Alabaster Snowball in the Speaker Unpreparedness Room.
 
@@ -1093,7 +1096,7 @@ while True:
     print(r.text)
 {% endhighlight %}
 
-### Retrieve Scraps of Paper from Server
+## Retrieve Scraps of Paper from Server
 
 > Gain access to the data on the [Student Portal](https://studentportal.elfu.org/) server and retrieve the paper scraps hosted there. What is the name of Santa's cutting-edge sleigh guidance system? For hints on achieving this objective, please visit the dorm and talk with Pepper Minstix.
 
@@ -1206,7 +1209,7 @@ Once again we can use our Gimp skills to patch the pieces together, and here's t
 
 ![All pieces patched together](/assets/2020-01-14-2019-SANS-holiday-hack-challenge-write-up/rebuilt.png)
 
-### Recover Cleartext Document
+## Recover Cleartext Document
 
 > The [Elfscrow Crypto tool](https://downloads.elfu.org/elfscrow.exe) is a vital asset used at Elf University for encrypting SUPER SECRET documents. We can't send you the source, but we do have [debug symbols](https://downloads.elfu.org/elfscrow.pdb) that you can use.
 >
@@ -1352,7 +1355,7 @@ for timestamp in range(1575658800, 1575666000):
 
 The encrypted file is a quick-start guide of the *Machine Learning Sleigh Route Finder*; check it out, that could be interesting.
 
-### Open the Sleigh Shop Door
+## Open the Sleigh Shop Door
 
 > Visit Shinny Upatree in the Student Union and help solve their problem. What is written on the paper you retrieve for Shinny?
 
@@ -1392,7 +1395,7 @@ What the heck is that? Well, if you simply search for "macaroni" in the HTML doc
 In the DOM view, drag-and-drop this div into the last lock (where the cover used to be), and validate it again. You'll then see another error message (*Missing cotton swab!*).
 Repeat the same procedure with the swab, then the gnome, and you'll be done with this challenge!
 
-### Filter Out Poisoned Sources of Weather Data
+## Filter Out Poisoned Sources of Weather Data
 
 >Use the data supplied in the [Zeek JSON logs](https://downloads.elfu.org/http.log.gz) to identify the IP addresses of attackers poisoning Santa's flight mapping software. [Block the 100 offending sources of information to guide Santa's sleigh through the attack](https://srf.elfu.org/). Submit the Route ID ("RID") success value that you're given. For hints on achieving this objective, please visit the Sleigh Shop and talk with Wunorse Openslae.
 
