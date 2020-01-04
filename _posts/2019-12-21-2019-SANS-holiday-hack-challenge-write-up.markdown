@@ -89,9 +89,9 @@ We can see multiple failed [NTLM](https://en.wikipedia.org/wiki/NT_LAN_Manager) 
 
 > What is the time ( HH:MM:SS ) the attacker makes a Remote Desktop connection to another machine?
 
-Let's now search for the [RDP](https://en.wikipedia.org/wiki/Remote_Desktop_Protocol) connections from the attacker's IP, on the default port 3389, using the query `DestinationPort:3389 AND SourceIp:"192.168.247.175"`. We get 4 results; but none of them is the correct response. And indeed, these are the timestamps when a connection is opened (on port 3389) in order to create an RDP session.
+Let's now search for the [RDP](https://en.wikipedia.org/wiki/Remote_Desktop_Protocol) connections from the attacker's IP, on the default port 3389, using the query `DestinationPort:3389 AND SourceIp:"192.168.247.175"`. We get 4 results; but none of the corresponding timestamps is the correct response. And indeed, these are the timestamps when a connection is opened (on port 3389); we are asked to find the moment when the attacker manages to log in using that connection.
 
-A [little bit of research](https://jpcertcc.github.io/ToolAnalysisResultSheet/details/mstsc.htm#KeyEvents-Destination) shows that, after a successfull RDP login attempt, we should see a log containing an EventID 4624 ("An account was successfully logged on."), with a Logon Type = 10 ("Terminal Service/Remote Desktop"). So let's try to display these events, with the query `EventID:4624 AND LogonType:10`. Bingo! We only fetched [one event](https://graylog.elfu.org/messages/graylog_0/6c638510-1b70-11ea-b211-0242ac120005
+A [little bit of research](https://jpcertcc.github.io/ToolAnalysisResultSheet/details/mstsc.htm#KeyEvents-Destination) shows that, after a successfull RDP login attempt, we should see a log containing an EventID 4624 ("An account was successfully logged on."), with a Logon Type 10 ("Terminal Service/Remote Desktop"). So let's try to display these events, with the query `EventID:4624 AND LogonType:10`. Bingo! We only fetched [one event](https://graylog.elfu.org/messages/graylog_0/6c638510-1b70-11ea-b211-0242ac120005
 ), at *06:04:28*, and we can even see that the connection was established from the attacker's IP (thanks to the field SourceNetworkAddress). The session seems to last until 06:08:32.
 
 > The attacker navigates the file system of a third host using their Remote Desktop Connection to the second host. What is the SourceHostName,DestinationHostname,LogonType of this connection?
@@ -114,6 +114,16 @@ We quickly spot [an event](https://graylog.elfu.org/messages/graylog_0/6650a630-
 Now that we have the file name, we can use it to find the command that was used to exfiltrate it. We'll see in [this event](https://graylog.elfu.org/messages/graylog_0/5f9cf370-1b70-11ea-b211-0242ac120005) that it was sent to pastebin.com. Then zooming around this event (not more than a few seconds), we finally find [this event](https://graylog.elfu.org/messages/graylog_0/5f9e04e0-1b70-11ea-b211-0242ac120005) which logs out established outgoing connection to pastebin, with the IP of the remote server: *104.22.3.84*.
 
 Incident report completed!
+
+### Minty Candycane
+
+The previous puzzle was actually way longer than the average elf puzzle. Let's chill a little bit and play the game next to Minty, in easy mode.
+
+At first glance, it seems that we're given some resources (money, reindeers, food, etc.), and that our goal will be to reach Kringlecon, which is 8000 miles(?) away. If we press "Go" a few times, we'll get closer to Kringlecon, but our resources will also start to vanish. Everytime we press "Go", we can see that the url at the top of our screen is updated, to something like that:
+
+> hhc://trail.hhc/trail/?difficulty=0&distance=317&money=5000&pace=0&curmonth=7&curday=4&reindeer=2&runners=2&ammo=96&meds=20&food=376&name0=Emmanuel&health0=100&cond0=0&causeofdeath0=&deathday0=0&deathmonth0=0&name1=Vlad&health1=100&cond1=0&causeofdeath1=&deathday1=0&deathmonth1=0&name2=Michael&health2=100&cond2=0&causeofdeath2=&deathday2=0&deathmonth2=0&name3=John&health3=100&cond3=2&causeofdeath3=&deathday3=0&deathmonth3=0
+
+Interesting. The current "situation" seems to be encoded directly in the URL. What happens if we update the value of parameter `distance` to 7999 (instead of 317) ? We're now 1 mile away from Kringlecon, and our resources are still exactly the same. We just need to press "Go" one last time to pass the finish line and complete the game.
 
 ### Kent Tinseltooth
 
