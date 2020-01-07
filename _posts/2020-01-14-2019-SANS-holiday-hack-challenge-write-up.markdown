@@ -11,7 +11,7 @@ I've tried my luck at the Holiday Hack Challenge in the past few years, but I di
 
 A few notes before we start:
 * I'm not a native English speaker, so please forgive any grammatical mistake in this write-up.
-* I'm a software engineer, so I'll use scripts whenever I can to perform repetitive tasks on my behalf. I'll use Python 3 as a scripting language, unless I absolutely need a library/tool which is not available in Python.
+* I'm a developer, so I'll use scripts whenever I can to perform repetitive tasks on my behalf. I'll use Python 3 as a scripting language, unless I absolutely need a library/tool which is not available in Python.
 * I'm not trying to solve this challenge as fast as I can (and, as far as I know, there's no prize for the fastest submission). Instead, I might here and there take a detour and explore things I did not know about, as I stumble upon them.
 
 Let's get going!
@@ -1125,7 +1125,7 @@ While visiting the student portal, it does not take long to observe that the [ap
 >
 > You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'test', 'test@test.com', 'test', 'test', 'test', 'test', 'pending')' at line 2
 
-I'm so happy we'll be able to use [sqlmap](https://github.com/sqlmapproject/sqlmap)! In case you've never used it, this tool is really good at trying all kind of injections (including not obvious ones, such as time-based [blind injections](https://www.owasp.org/index.php/Blind_SQL_Injection)), and as soon as a vulnerability is found, it canbasically give you an SQL shell.
+I'm so happy we'll be able to use [sqlmap](https://github.com/sqlmapproject/sqlmap)! In case you've never used it, this tool is really good at trying all kind of injections (including not obvious ones, such as time-based [blind injections](https://www.owasp.org/index.php/Blind_SQL_Injection)), and as soon as a vulnerability is found, it can basically give you an SQL shell.
 
 Still, if we try it blindly on this form, it does not seem to find the SQL injection, even though we were able to spot it by inserting a dummy simple quote in one of the fields! So there must be something happening when we apply using our browser, which is not happening when sqlmap probes for an injection. Let's have a closer look at the content of the request sent by our browser, using the developer tools network tab:
 
